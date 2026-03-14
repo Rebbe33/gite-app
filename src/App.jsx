@@ -1,9 +1,11 @@
 import { useState } from 'react'
-import { Calendar, ClipboardList, Package, StickyNote, Plus, Settings, X, Check, Pencil, Trash2, Upload } from 'lucide-react'
+import { Calendar, ClipboardList, Package, StickyNote, Clock, Plus, Settings, X, Check, Pencil, Trash2, Upload } from 'lucide-react'
 import { useGites } from './hooks/useGites'
 import { parseTasksExcel } from './lib/excel'
 
 import Planning from './pages/Planning'
+import Heures   from './pages/Heures'
+import NotifSettings from './components/NotifSettings'
 import Menage   from './pages/Menage'
 import Stocks   from './pages/Stocks'
 import Notes    from './pages/Notes'
@@ -42,6 +44,7 @@ function AddGiteModal({ onSave, onClose }) {
           <h2 className="modal-title">Nouveau gîte</h2>
           <button className="icon-btn" onClick={onClose}><X size={18} /></button>
         </div>
+        <div style={{marginBottom:'1rem'}}><NotifSettings /></div>
         <div className="form-grid">
           <div className="form-field full">
             <label>Nom du gîte</label>
@@ -105,6 +108,7 @@ function GiteApp({ gite, tab, setTab }) {
       {tab === 'menage'    && <Menage   giteId={gite.id} />}
       {tab === 'stocks'    && <Stocks   giteId={gite.id} />}
       {tab === 'notes'     && <Notes    giteId={gite.id} giteName={gite.nom} />}
+      {tab === 'heures'    && <Heures />}
     </main>
   )
 }
@@ -211,6 +215,7 @@ export default function App() {
             { id: 'menage',   label: 'Ménage',   Icon: ClipboardList },
             { id: 'stocks',   label: 'Stocks',   Icon: Package },
             { id: 'notes',    label: 'Notes',    Icon: StickyNote },
+          { id: 'heures',   label: 'Heures',   Icon: Clock },
           ].map(({ id, label, Icon }) => (
             <button key={id} className={`nav-btn ${tab===id?'active':''}`} onClick={() => setTab(id)}>
               <Icon size={17} />
