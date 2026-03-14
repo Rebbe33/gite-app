@@ -35,8 +35,8 @@ export function useHeures(giteId = null) {
 
   const fetch = useCallback(async () => {
     setLoading(true)
-    let sq = supabase.from('heures_sessions').select('*, gites(nom)').order('date_session', { ascending: false })
-    let pq = supabase.from('paiements').select('*, gites(nom)').order('date_paiement', { ascending: false })
+    let sq = supabase.from('gite_heures_sessions').select('*, gite_gites(nom)').order('date_session', { ascending: false })
+    let pq = supabase.from('gite_paiements').select('*, gite_gites(nom)').order('date_paiement', { ascending: false })
     if (giteId) { sq = sq.eq('gite_id', giteId); pq = pq.eq('gite_id', giteId) }
     const [{ data: s }, { data: p }] = await Promise.all([sq, pq])
     setSessions(s || [])
@@ -47,24 +47,24 @@ export function useHeures(giteId = null) {
   useEffect(() => {
     fetch()
     const sub = supabase.channel('heures')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'heures_sessions' }, fetch)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'paiements' }, fetch)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'gite_heures_sessions' }, fetch)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'gite_paiements' }, fetch)
       .subscribe()
     return () => supabase.removeChannel(sub)
   }, [fetch])
 
   const addSession = async ({ gite_id, passage_id = null, duree_minutes, date_session, note = '' }) => {
-    await supabase.from('heures_sessions').insert({ gite_id, passage_id, duree_minutes, date_session, note })
+    await supabase.from('gite_heures_sessions').insert({ gite_id, passage_id, duree_minutes, date_session, note })
     await fetch()
   }
 
   const deleteSession = async (id) => {
-    await supabase.from('heures_sessions').delete().eq('id', id)
+    await supabase.from('gite_heures_sessions').delete().eq('id', id)
     await fetch()
   }
 
   const deletePaiement = async (id) => {
-    await supabase.from('paiements').delete().eq('id', id)
+    await supabase.from('gite_paiements').delete().eq('id', id)
     await fetch()
   }
 
@@ -74,7 +74,7 @@ export function useHeures(giteId = null) {
     if (unpaid.length === 0) return
     const total = unpaid.reduce((acc, s) => acc + s.duree_minutes, 0)
     const dates = unpaid.map(s => s.date_session).sort()
-    await supabase.from('paiements').insert({
+    await supabase.from('gite_paiements').insert({
       gite_id,
       total_minutes: total,
       periode_debut: dates[0],
@@ -83,7 +83,7 @@ export function useHeures(giteId = null) {
       note,
     })
     // Supprimer les sessions archivées
-    await supabase.from('heures_sessions').delete().eq('gite_id', gite_id)
+    await supabase.from('gite_heures_sessions').delete().eq('gite_id', gite_id)
     await fetch()
   }
 
