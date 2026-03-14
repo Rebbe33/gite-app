@@ -92,7 +92,7 @@ function PayerModal({ gite, totalMinutes, onConfirm, onClose }) {
 
 export default function Heures() {
   const { gites } = useGites()
-  const { sessions, paiements, loading, addSession, deleteSession, payerGite, statsByGite, statsByMonth, statsByYear } = useHeures()
+  const { sessions, paiements, loading, addSession, deleteSession, deletePaiement, payerGite, statsByGite, statsByMonth, statsByYear } = useHeures()
   const [showAdd, setShowAdd] = useState(false)
   const [payingGite, setPayingGite] = useState(null)
   const [activeTab, setActiveTab] = useState('courant') // courant | historique
@@ -239,6 +239,9 @@ export default function Heures() {
                   <div className="paiement-right">
                     <span className="heures-badge green">{formatMinutes(p.total_minutes)}</span>
                     <div className="paiement-date">{new Date(p.date_paiement).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
+                    <button className="icon-btn-xs danger" onClick={() => window.confirm('Supprimer ce paiement archivé ?') && deletePaiement(p.id)}>
+                      <Trash2 size={12} />
+                    </button>
                   </div>
                 </div>
               ))}
