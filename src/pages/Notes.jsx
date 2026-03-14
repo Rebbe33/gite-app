@@ -6,14 +6,14 @@ export default function Notes({ giteId, giteName }) {
   const [saved, setSaved] = useState(true)
 
   useEffect(() => {
-    supabase.from('gites').select('notes').eq('id', giteId).single()
+    supabase.from('gite_gites').select('notes').eq('id', giteId).single()
       .then(({ data }) => { if (data?.notes) setNotes(data.notes) })
   }, [giteId])
 
   useEffect(() => {
     setSaved(false)
     const t = setTimeout(async () => {
-      await supabase.from('gites').update({ notes }).eq('id', giteId)
+      await supabase.from('gite_gites').update({ notes }).eq('id', giteId)
       setSaved(true)
     }, 800)
     return () => clearTimeout(t)
