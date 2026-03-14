@@ -63,6 +63,11 @@ export function useHeures(giteId = null) {
     await fetch()
   }
 
+  const deletePaiement = async (id) => {
+    await supabase.from('paiements').delete().eq('id', id)
+    await fetch()
+  }
+
   // Clôturer et payer : archive les sessions non payées d'un gîte
   const payerGite = async (gite_id, note = '') => {
     const unpaid = sessions.filter(s => s.gite_id === gite_id)
@@ -128,7 +133,7 @@ export function useHeures(giteId = null) {
 
   return {
     sessions, paiements, loading,
-    addSession, deleteSession, payerGite,
+    addSession, deleteSession, deletePaiement, payerGite,
     statsByGite, statsByMonth, statsByYear,
     refresh: fetch,
   }
