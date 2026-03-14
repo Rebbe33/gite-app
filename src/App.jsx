@@ -44,7 +44,6 @@ function AddGiteModal({ onSave, onClose }) {
           <h2 className="modal-title">Nouveau gîte</h2>
           <button className="icon-btn" onClick={onClose}><X size={18} /></button>
         </div>
-        <div style={{marginBottom:'1rem'}}><NotifSettings /></div>
         <div className="form-grid">
           <div className="form-field full">
             <label>Nom du gîte</label>
@@ -77,8 +76,12 @@ function GiteSettings({ gite, onRename, onDelete, onClose }) {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
-          <h2 className="modal-title">Paramètres — {gite.nom}</h2>
+          <h2 className="modal-title">Paramètres</h2>
           <button className="icon-btn" onClick={onClose}><X size={18} /></button>
+        </div>
+        <div style={{ marginBottom: '1rem' }}>
+          <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-2)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.05em' }}>Notifications</div>
+          <NotifSettings />
         </div>
         <div className="form-grid">
           <div className="form-field full">
