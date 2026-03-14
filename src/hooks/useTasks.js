@@ -13,8 +13,8 @@ export function useTasks(giteId) {
     setLoading(true)
 
     const [{ data: taskData }, { data: passageData }] = await Promise.all([
-      supabase.from('tasks').select('*').eq('gite_id', giteId).order('ordre'),
-      supabase.from('passages').select('*').eq('gite_id', giteId).order('numero', { ascending: false }),
+      supabase.from('gite_tasks').select('*').eq('gite_id', giteId).order('ordre'),
+      supabase.from('gite_passages').select('*').eq('gite_id', giteId).order('numero', { ascending: false }),
     ])
 
     const allPassages = passageData || []
@@ -43,11 +43,11 @@ export function useTasks(giteId) {
     fetchAll()
     if (!giteId) return
     const sub = supabase.channel(`tasks-${giteId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'task_logs',
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'gite_task_logs',
         filter: `gite_id=eq.${giteId}` }, fetchAll)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'passages',
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'gite_passages',
         filter: `gite_id=eq.${giteId}` }, fetchAll)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks',
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'gite_tasks',
         filter: `gite_id=eq.${giteId}` }, fetchAll)
       .subscribe()
     return () => supabase.removeChannel(sub)
@@ -56,7 +56,7 @@ export function useTasks(giteId) {
   const ensurePassage = async () => {
     if (passage) return passage
     const num = passageCount + 1
-    const { data } = await supabase.from('passages')
+    const { data } = await supabase.from('gite_passages')
       .insert({ gite_id: giteId, numero: num, cloture: false })
       .select().single()
     setPassage(data)
@@ -69,12 +69,12 @@ export function useTasks(giteId) {
     const existing = logs.find(l => l.task_id === taskId)
     if (existing) {
       const newDone = !existing.done
-      await supabase.from('task_logs')
+      await supabase.from('gite_task_logs')
         .update({ done: newDone, done_at: newDone ? new Date().toISOString() : null })
         .eq('id', existing.id)
       setLogs(prev => prev.map(l => l.id === existing.id ? { ...l, done: newDone } : l))
     } else {
-      const { data } = await supabase.from('task_logs')
+      const { data } = await supabase.from('gite_task_logs')
         .insert({ gite_id: giteId, task_id: taskId, passage_numero: p.numero, done: true, done_at: new Date().toISOString() })
         .select().single()
       if (data) setLogs(prev => [...prev, data])
@@ -87,10 +87,10 @@ export function useTasks(giteId) {
     const doneLogs = logs.filter(l => l.done)
     if (doneLogs.length > 0) {
       await Promise.all(doneLogs.map(l =>
-        supabase.from('tasks').update({ last_done_passage: num }).eq('id', l.task_id)
+        supabase.from('gite_tasks').update({ last_done_passage: num }).eq('id', l.task_id)
       ))
     }
-    await supabase.from('passages').update({ cloture: true }).eq('id', passage.id)
+    await supabase.from('gite_passages').update({ cloture: true }).eq('id', passage.id)
     await fetchAll()
   }
 
@@ -103,24 +103,24 @@ export function useTasks(giteId) {
   }
 
   const importTasks = async (rawTasks) => {
-    await supabase.from('tasks').delete().eq('gite_id', giteId)
+    await supabase.from('gite_tasks').delete().eq('gite_id', giteId)
     const toInsert = rawTasks.map((t, i) => ({ ...t, gite_id: giteId, ordre: i, last_done_passage: 0 }))
-    await supabase.from('tasks').insert(toInsert)
+    await supabase.from('gite_tasks').insert(toInsert)
     await fetchAll()
   }
 
   const addTask = async (task) => {
-    await supabase.from('tasks').insert({ ...task, gite_id: giteId, ordre: tasks.length, last_done_passage: 0 })
+    await supabase.from('gite_tasks').insert({ ...task, gite_id: giteId, ordre: tasks.length, last_done_passage: 0 })
     await fetchAll()
   }
 
   const updateTask = async (id, updates) => {
-    await supabase.from('tasks').update(updates).eq('id', id)
+    await supabase.from('gite_tasks').update(updates).eq('id', id)
     await fetchAll()
   }
 
   const deleteTask = async (id) => {
-    await supabase.from('tasks').delete().eq('id', id)
+    await supabase.from('gite_tasks').delete().eq('id', id)
     await fetchAll()
   }
 
