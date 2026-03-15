@@ -15,6 +15,7 @@ export function usePushNotifications() {
   const [subscribed, setSubscribed] = useState(false)
   const [loading, setLoading] = useState(false)
   const [supported, setSupported] = useState(false)
+  const [lastError, setLastError] = useState(null)
 
   useEffect(() => {
     const ok = 'Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window
@@ -31,34 +32,65 @@ export function usePushNotifications() {
       if (!reg) return
       const sub = await reg.pushManager.getSubscription()
       setSubscribed(!!sub)
-    } catch {}
+    } catch (e) {
+      setLastError('Erreur vérification subscription: ' + e.message)
+    }
   }
 
   async function subscribe() {
+    setLastError(null)
     if (!VAPID_PUBLIC_KEY) {
-      alert('Clé VAPID manquante. Voir README pour la configuration.')
-      return
+      const msg = 'Clé VAPID manquante (VITE_VAPID_PUBLIC_KEY)'
+      setLastError(msg)
+      throw new Error(msg)
     }
     setLoading(true)
     try {
+      // Enregistrer le service worker
       const reg = await navigator.serviceWorker.register('/sw.js')
       await navigator.serviceWorker.ready
+
+      // Demander permission
       const perm = await Notification.requestPermission()
       setPermission(perm)
-      if (perm !== 'granted') { setLoading(false); return }
+      if (perm !== 'granted') {
+        setLastError('Permission refusée par le navigateur')
+        setLoading(false)
+        return
+      }
+
+      // Forcer une nouvelle subscription (supprimer l'ancienne si elle existe)
+      const existing = await reg.pushManager.getSubscription()
+      if (existing) await existing.unsubscribe()
+
+      // Créer la nouvelle subscription
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
       })
+
       const json = sub.toJSON()
-      await supabase.from('gite_push_subscriptions').upsert({
+      if (!json.keys) {
+        setLastError('Subscription invalide — pas de clés')
+        return
+      }
+
+      // Sauvegarder dans Supabase
+      const { error } = await supabase.from('gite_push_subscriptions').upsert({
         endpoint: json.endpoint,
         p256dh: json.keys.p256dh,
         auth: json.keys.auth,
       }, { onConflict: 'endpoint' })
+
+      if (error) {
+        setLastError('Erreur Supabase: ' + error.message)
+        return
+      }
+
       setSubscribed(true)
     } catch (e) {
-      console.error('Push subscription failed:', e)
+      setLastError('Erreur: ' + e.message)
+      throw e
     } finally {
       setLoading(false)
     }
@@ -80,5 +112,5 @@ export function usePushNotifications() {
     }
   }
 
-  return { supported, permission, subscribed, loading, subscribe, unsubscribe }
+  return { supported, permission, subscribed, loading, lastError, subscribe, unsubscribe }
 }
