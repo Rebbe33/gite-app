@@ -72,13 +72,27 @@ function AddGiteModal({ onSave, onClose }) {
   )
 }
 
-function GiteSettings({ gite, onRename, onDelete, onClose }) {
+function GiteSettings({ gite, onRename, onDelete, onUpdate, onClose }) {
   const [name, setName] = useState(gite.nom)
+  const [modeSuivi, setModeSuivi] = useState(gite.mode_suivi || 'amiable')
+  const [tauxHoraire, setTauxHoraire] = useState(gite.taux_horaire || 0)
+  const [forfaitMontant, setForfaitMontant] = useState(gite.forfait_montant || 0)
+
+  const handleSave = () => {
+    onRename(gite.id, name)
+    onUpdate(gite.id, {
+      mode_suivi: modeSuivi,
+      taux_horaire: modeSuivi === 'taux_horaire' ? parseFloat(tauxHoraire) : 0,
+      forfait_montant: modeSuivi === 'forfait' ? parseFloat(forfaitMontant) : 0,
+    })
+    onClose()
+  }
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
-          <h2 className="modal-title">Paramètres</h2>
+          <h2 className="modal-title">Paramètres — {gite.nom}</h2>
           <button className="icon-btn" onClick={onClose}><X size={18} /></button>
         </div>
         <div style={{ marginBottom: '1rem' }}>
@@ -87,17 +101,39 @@ function GiteSettings({ gite, onRename, onDelete, onClose }) {
         </div>
         <div className="form-grid">
           <div className="form-field full">
-            <label>Renommer</label>
+            <label>Nom du gîte</label>
             <input value={name} onChange={e => setName(e.target.value)} />
           </div>
+          <div className="form-field full">
+            <label>Mode de suivi financier</label>
+            <select value={modeSuivi} onChange={e => setModeSuivi(e.target.value)}>
+              <option value="amiable">À l'amiable — heures + versements reçus</option>
+              <option value="taux_horaire">Taux horaire — montant calculé automatiquement</option>
+              <option value="forfait">Forfait par passage — montant fixe</option>
+            </select>
+          </div>
+          {modeSuivi === 'taux_horaire' && (
+            <div className="form-field full">
+              <label>Taux horaire (€/h)</label>
+              <input type="number" step="0.5" min="0" value={tauxHoraire}
+                onChange={e => setTauxHoraire(e.target.value)} placeholder="12.00" />
+            </div>
+          )}
+          {modeSuivi === 'forfait' && (
+            <div className="form-field full">
+              <label>Montant par passage (€)</label>
+              <input type="number" step="1" min="0" value={forfaitMontant}
+                onChange={e => setForfaitMontant(e.target.value)} placeholder="50.00" />
+            </div>
+          )}
         </div>
         <div className="modal-actions">
           <button className="btn-danger" onClick={() => window.confirm(`Supprimer ${gite.nom} et toutes ses données ?`) && onDelete(gite.id)}>
             <Trash2 size={14} /> Supprimer
           </button>
           <button className="btn-gray" onClick={onClose}>Fermer</button>
-          <button className="btn-primary" onClick={() => onRename(gite.id, name)}>
-            <Check size={14} /> Renommer
+          <button className="btn-primary" onClick={handleSave}>
+            <Check size={14} /> Enregistrer
           </button>
         </div>
       </div>
@@ -109,9 +145,9 @@ function GiteSettings({ gite, onRename, onDelete, onClose }) {
 function GiteApp({ gite, tab, setTab }) {
   return (
     <main className="main">
-      {tab === 'dashboard' && <Dashboard />}
       {tab === 'planning'  && <Planning giteId={gite.id} />}
       {tab === 'menage'    && <Menage   giteId={gite.id} />}
+      {tab === 'stocks'    && <Stocks   giteId={gite.id} />}
       {tab === 'notes'     && <Notes     giteId={gite.id} giteName={gite.nom} />}
       {tab === 'heures'    && <Heures    giteId={gite.id} />}
       {tab === 'finances'  && <Finances  giteId={gite.id} />}
@@ -120,7 +156,7 @@ function GiteApp({ gite, tab, setTab }) {
 }
 
 export default function App() {
-  const { gites, loading, error, addGite, deleteGite, renameGite } = useGites()
+  const { gites, loading, error, addGite, deleteGite, renameGite, updateGite } = useGites()
   const [activeGiteId, setActiveGiteId] = useState(null)
   const [tab, setTab] = useState('menage')
   const [showAddGite, setShowAddGite] = useState(false)
@@ -217,11 +253,11 @@ export default function App() {
       {gites.length > 0 && (
         <nav className="nav">
           {[
-           { id: 'dashboard', label: 'Global',    Icon: LayoutDashboard },
-            { id: 'planning',  label: 'Planning',  Icon: Calendar },
-            { id: 'menage',    label: 'Ménage',    Icon: ClipboardList },
-            { id: 'finances',  label: 'Finances',  Icon: Euro },
-            { id: 'heures',    label: 'Heures',    Icon: Clock },
+            { id: 'planning', label: 'Planning', Icon: Calendar },
+            { id: 'menage',   label: 'Ménage',   Icon: ClipboardList },
+            { id: 'stocks',   label: 'Stocks',   Icon: Package },
+            { id: 'notes',    label: 'Notes',    Icon: StickyNote },
+          { id: 'heures',   label: 'Heures',   Icon: Clock },
           ].map(({ id, label, Icon }) => (
             <button key={id} className={`nav-btn ${tab===id?'active':''}`} onClick={() => setTab(id)}>
               <Icon size={17} />
@@ -238,7 +274,8 @@ export default function App() {
       {showSettings && activeGite && (
         <GiteSettings
           gite={activeGite}
-          onRename={async (id, nom) => { await renameGite(id, nom); setShowSettings(false) }}
+          onRename={async (id, nom) => { await renameGite(id, nom) }}
+          onUpdate={async (id, updates) => { await updateGite(id, updates) }}
           onDelete={async (id) => { await deleteGite(id); setActiveGiteId(null); setShowSettings(false) }}
           onClose={() => setShowSettings(false)}
         />
