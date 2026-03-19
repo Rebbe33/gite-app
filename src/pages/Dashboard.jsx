@@ -283,17 +283,20 @@ export default function Dashboard() {
   const { gites } = useGites()
   const allResas  = useAllReservations(gites)
   const allLow    = useAllStocks(gites)
-  const { add: addResa } = useReservations(null)
   const [showAddResa, setShowAddResa] = useState(false)
 
   // Pour ajouter une résa depuis le dashboard, on utilise useReservations par gîte
-  const { reservations: _r, add: _add, ...resaHooks } = useReservations(null)
-
   const handleAddResa = async (form) => {
-    await resaHooks
-    // On importe directement supabase
     const { supabase } = await import('../lib/supabase.js')
-    await supabase.from('gite_reservations').insert({ ...form, gite_id: form.gite_id })
+    await supabase.from('gite_reservations').insert({
+      gite_id: form.gite_id,
+      nom_locataire: form.nom_locataire,
+      date_arrivee: form.date_arrivee,
+      date_depart: form.date_depart,
+      nb_personnes: form.nb_personnes,
+      statut: form.statut,
+      notes: form.notes || ''
+    })
     setShowAddResa(false)
   }
 
