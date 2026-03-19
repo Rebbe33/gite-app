@@ -22,7 +22,9 @@ export function useGites() {
   }, [fetchGites])
 
   const addGite = async (nom) => {
-    const { data, error } = await supabase.from('gite_gites').insert({ nom }).select().single()
+    const { data, error } = await supabase.from('gite_gites')
+      .insert({ nom, mode_suivi: 'amiable', taux_horaire: 0, forfait_montant: 0 })
+      .select().single()
     if (error) throw error
     return data
   }
@@ -35,5 +37,10 @@ export function useGites() {
     await supabase.from('gite_gites').update({ nom }).eq('id', id)
   }
 
-  return { gites, loading, error, addGite, deleteGite, renameGite, refresh: fetchGites }
+  const updateGite = async (id, updates) => {
+    await supabase.from('gite_gites').update(updates).eq('id', id)
+    await fetchGites()
+  }
+
+  return { gites, loading, error, addGite, deleteGite, renameGite, updateGite, refresh: fetchGites }
 }
