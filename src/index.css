@@ -315,3 +315,6 @@ body {
 .fin-detail-val { font-weight: 500; }
 .fin-detail-val.du { color: var(--warm); }
 .fin-detail-val.recu { color: var(--sage); }
+
+/* ── ICON BTN ACTIVE ── */
+.icon-btn-active { color: var(--sage) !important; background: var(--sage-light) !important; }
