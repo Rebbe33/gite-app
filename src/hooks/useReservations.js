@@ -7,7 +7,7 @@ export function useReservations(giteId) {
 
   const fetch = useCallback(async () => {
     if (!giteId) return
-    const { data } = await supabase.from('gite_reservations')
+    const { data } = await supabase.from('reservations')
       .select('*').eq('gite_id', giteId)
       .order('date_arrivee')
     setReservations(data || [])
@@ -16,25 +16,25 @@ export function useReservations(giteId) {
 
   useEffect(() => {
     fetch()
-    const sub = supabase.channel(`resa-${giteId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'gite_reservations',
+    const sub = supabase.channel(`resa-${giteId}-${Date.now()}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'reservations',
         filter: `gite_id=eq.${giteId}` }, fetch)
       .subscribe()
     return () => supabase.removeChannel(sub)
   }, [giteId, fetch])
 
   const add = async (resa) => {
-    await supabase.from('gite_reservations').insert({ ...resa, gite_id: giteId })
+    await supabase.from('reservations').insert({ ...resa, gite_id: giteId })
     await fetch()
   }
 
   const update = async (id, updates) => {
-    await supabase.from('gite_reservations').update(updates).eq('id', id)
+    await supabase.from('reservations').update(updates).eq('id', id)
     await fetch()
   }
 
   const remove = async (id) => {
-    await supabase.from('gite_reservations').delete().eq('id', id)
+    await supabase.from('reservations').delete().eq('id', id)
     await fetch()
   }
 
