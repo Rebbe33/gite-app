@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Calendar, ClipboardList, Package, StickyNote, Clock, LayoutDashboard, Euro, Plus, Settings, X, Check, Pencil, Trash2, Upload } from 'lucide-react'
+import { Calendar, ClipboardList, Package, StickyNote, Clock, LayoutDashboard, Euro, Home, Plus, Settings, X, Check, Pencil, Trash2, Upload } from 'lucide-react'
 import { useGites } from './hooks/useGites'
 import { parseTasksExcel } from './lib/excel'
 
@@ -74,6 +74,7 @@ function AddGiteModal({ onSave, onClose }) {
 
 function GiteSettings({ gite, onRename, onDelete, onUpdate, onClose }) {
   const [name, setName] = useState(gite.nom)
+  const [proprietaire, setProprietaire] = useState(gite.proprietaire || '')
   const [modeSuivi, setModeSuivi] = useState(gite.mode_suivi || 'amiable')
   const [tauxHoraire, setTauxHoraire] = useState(gite.taux_horaire || 0)
   const [forfaitMontant, setForfaitMontant] = useState(gite.forfait_montant || 0)
@@ -81,6 +82,7 @@ function GiteSettings({ gite, onRename, onDelete, onUpdate, onClose }) {
   const handleSave = () => {
     onRename(gite.id, name)
     onUpdate(gite.id, {
+      proprietaire,
       mode_suivi: modeSuivi,
       taux_horaire: modeSuivi === 'taux_horaire' ? parseFloat(tauxHoraire) : 0,
       forfait_montant: modeSuivi === 'forfait' ? parseFloat(forfaitMontant) : 0,
@@ -103,6 +105,10 @@ function GiteSettings({ gite, onRename, onDelete, onUpdate, onClose }) {
           <div className="form-field full">
             <label>Nom du gîte</label>
             <input value={name} onChange={e => setName(e.target.value)} />
+          </div>
+          <div className="form-field full">
+            <label>Propriétaire</label>
+            <input value={proprietaire} onChange={e => setProprietaire(e.target.value)} placeholder="Mme Martin"/>
           </div>
           <div className="form-field full">
             <label>Mode de suivi financier</label>
@@ -145,9 +151,9 @@ function GiteSettings({ gite, onRename, onDelete, onUpdate, onClose }) {
 function GiteApp({ gite, tab, setTab }) {
   return (
     <main className="main">
-   {tab === 'dashboard' && <Dashboard />}
       {tab === 'planning'  && <Planning giteId={gite.id} />}
       {tab === 'menage'    && <Menage   giteId={gite.id} />}
+      {tab === 'stocks'    && <Stocks   giteId={gite.id} />}
       {tab === 'notes'     && <Notes     giteId={gite.id} giteName={gite.nom} />}
       {tab === 'heures'    && <Heures    giteId={gite.id} />}
       {tab === 'finances'  && <Finances  giteId={gite.id} />}
@@ -206,6 +212,9 @@ export default function App() {
             </div>
           </div>
           <div className="header-actions">
+            <button className={`icon-btn ${tab==='dashboard'?'icon-btn-active':''}`} onClick={() => setTab('dashboard')} title="Vue globale">
+              <Home size={17} />
+            </button>
             {activeGite && (
               <button className="icon-btn" onClick={() => setShowSettings(true)} title="Paramètres gîte">
                 <Settings size={17} />
@@ -253,11 +262,11 @@ export default function App() {
       {gites.length > 0 && (
         <nav className="nav">
           {[
-           { id: 'dashboard', label: 'Global',    Icon: LayoutDashboard },
-            { id: 'planning',  label: 'Planning',  Icon: Calendar },
-            { id: 'menage',    label: 'Ménage',    Icon: ClipboardList },
-            ...(activeGite?.mode_suivi && activeGite.mode_suivi !== 'amiable' ? [{ id: 'finances', label: 'Finances', Icon: Euro }] : []),
-            { id: 'heures',    label: 'Heures',    Icon: Clock },
+            { id: 'planning', label: 'Planning', Icon: Calendar },
+            { id: 'menage',   label: 'Ménage',   Icon: ClipboardList },
+            { id: 'stocks',   label: 'Stocks',   Icon: Package },
+            { id: 'notes',    label: 'Notes',    Icon: StickyNote },
+          { id: 'heures',   label: 'Heures',   Icon: Clock },
           ].map(({ id, label, Icon }) => (
             <button key={id} className={`nav-btn ${tab===id?'active':''}`} onClick={() => setTab(id)}>
               <Icon size={17} />
