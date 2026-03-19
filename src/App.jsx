@@ -109,9 +109,9 @@ function GiteSettings({ gite, onRename, onDelete, onClose }) {
 function GiteApp({ gite, tab, setTab }) {
   return (
     <main className="main">
+      {tab === 'dashboard' && <Dashboard />}
       {tab === 'planning'  && <Planning giteId={gite.id} />}
       {tab === 'menage'    && <Menage   giteId={gite.id} />}
-      {tab === 'stocks'    && <Stocks   giteId={gite.id} />}
       {tab === 'notes'     && <Notes     giteId={gite.id} giteName={gite.nom} />}
       {tab === 'heures'    && <Heures    giteId={gite.id} />}
       {tab === 'finances'  && <Finances  giteId={gite.id} />}
@@ -217,11 +217,11 @@ export default function App() {
       {gites.length > 0 && (
         <nav className="nav">
           {[
-            { id: 'planning', label: 'Planning', Icon: Calendar },
-            { id: 'menage',   label: 'Ménage',   Icon: ClipboardList },
-            { id: 'stocks',   label: 'Stocks',   Icon: Package },
-            { id: 'notes',    label: 'Notes',    Icon: StickyNote },
-          { id: 'heures',   label: 'Heures',   Icon: Clock },
+           { id: 'dashboard', label: 'Global',    Icon: LayoutDashboard },
+            { id: 'planning',  label: 'Planning',  Icon: Calendar },
+            { id: 'menage',    label: 'Ménage',    Icon: ClipboardList },
+            { id: 'finances',  label: 'Finances',  Icon: Euro },
+            { id: 'heures',    label: 'Heures',    Icon: Clock },
           ].map(({ id, label, Icon }) => (
             <button key={id} className={`nav-btn ${tab===id?'active':''}`} onClick={() => setTab(id)}>
               <Icon size={17} />
