@@ -14,11 +14,15 @@ import Notes    from './pages/Notes'
 import './index.css'
 
 function AddGiteModal({ onSave, onClose }) {
-  const [name, setName]     = useState('')
-  const [file, setFile]     = useState(null)
-  const [tasks, setTasks]   = useState(null)
-  const [error, setError]   = useState(null)
-  const [loading, setLoading] = useState(false)
+  const [name, setName]         = useState('')
+  const [modeSuivi, setModeSuivi] = useState('amiable')
+  const [tauxHoraire, setTauxHoraire] = useState('')
+  const [forfaitMontant, setForfaitMontant] = useState('')
+  const [proprietaire, setProprietaire] = useState('')
+  const [file, setFile]         = useState(null)
+  const [tasks, setTasks]       = useState(null)
+  const [error, setError]       = useState(null)
+  const [loading, setLoading]   = useState(false)
 
   const handleFile = async (e) => {
     const f = e.target.files?.[0]
@@ -35,7 +39,14 @@ function AddGiteModal({ onSave, onClose }) {
   const handleSave = async () => {
     if (!name.trim()) return
     setLoading(true)
-    try { await onSave(name.trim(), tasks || []) }
+    try {
+      await onSave(name.trim(), tasks || [], {
+        mode_suivi: modeSuivi,
+        proprietaire,
+        taux_horaire: modeSuivi === 'taux_horaire' ? parseFloat(tauxHoraire)||0 : 0,
+        forfait_montant: modeSuivi === 'forfait' ? parseFloat(forfaitMontant)||0 : 0,
+      })
+    }
     finally { setLoading(false) }
   }
 
@@ -51,6 +62,30 @@ function AddGiteModal({ onSave, onClose }) {
             <label>Nom du gîte</label>
             <input value={name} onChange={e => setName(e.target.value)} placeholder="Gîte du Passeur" autoFocus />
           </div>
+          <div className="form-field full">
+            <label>Propriétaire</label>
+            <input value={proprietaire} onChange={e => setProprietaire(e.target.value)} placeholder="Mme Martin"/>
+          </div>
+          <div className="form-field full">
+            <label>Mode de suivi financier</label>
+            <select value={modeSuivi} onChange={e => setModeSuivi(e.target.value)}>
+              <option value="amiable">{"À l'amiable"}</option>
+              <option value="taux_horaire">Taux horaire</option>
+              <option value="forfait">Forfait par passage</option>
+            </select>
+          </div>
+          {modeSuivi === 'taux_horaire' && (
+            <div className="form-field full">
+              <label>Taux horaire (€/h)</label>
+              <input type="number" step="0.5" min="0" value={tauxHoraire} onChange={e => setTauxHoraire(e.target.value)} placeholder="12.00"/>
+            </div>
+          )}
+          {modeSuivi === 'forfait' && (
+            <div className="form-field full">
+              <label>Montant forfait (€)</label>
+              <input type="number" step="1" min="0" value={forfaitMontant} onChange={e => setForfaitMontant(e.target.value)} placeholder="50.00"/>
+            </div>
+          )}
           <div className="form-field full">
             <label>Fichier Excel de tâches <span style={{ color:'#9c9890' }}>(optionnel, importable plus tard)</span></label>
             <label className="file-drop">
@@ -189,8 +224,11 @@ export default function App() {
     </div>
   )
 
-  const handleAddGite = async (name, tasks) => {
+  const handleAddGite = async (name, tasks, options = {}) => {
     const gite = await addGite(name)
+    if (options && Object.keys(options).length > 0) {
+      await updateGite(gite.id, options)
+    }
     if (tasks.length > 0) {
       const { supabase } = await import('./lib/supabase.js')
       const toInsert = tasks.map(t => ({ ...t, gite_id: gite.id }))
