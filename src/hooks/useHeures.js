@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 
-// Convertit "2h30" ou "1h" ou "45" (minutes) en minutes
 export function parseduree(str) {
   if (!str) return 0
   str = str.trim().toLowerCase().replace(',', '.')
@@ -18,7 +17,6 @@ export function parseduree(str) {
   return 0
 }
 
-// Formate des minutes en "2h30" ou "45min"
 export function formatMinutes(total) {
   if (!total) return '0min'
   const h = Math.floor(total / 60)
@@ -35,8 +33,12 @@ export function useHeures(giteId = null) {
 
   const fetch = useCallback(async () => {
     setLoading(true)
-    let sq = supabase.from('gite_heures_sessions').select('*, gite_gites(nom)').order('date_session', { ascending: false })
-    let pq = supabase.from('gite_paiements').select('*, gite_gites(nom)').order('date_paiement', { ascending: false })
+    let sq = supabase.from('gite_heures_sessions')
+      .select('*, gite_gites(nom, mode_suivi, taux_horaire, forfait_montant, proprietaire)')
+      .order('date_session', { ascending: false })
+    let pq = supabase.from('gite_paiements')
+      .select('*, gite_gites(nom)')
+      .order('date_paiement', { ascending: false })
     if (giteId) { sq = sq.eq('gite_id', giteId); pq = pq.eq('gite_id', giteId) }
     const [{ data: s }, { data: p }] = await Promise.all([sq, pq])
     setSessions(s || [])
@@ -46,7 +48,7 @@ export function useHeures(giteId = null) {
 
   useEffect(() => {
     fetch()
-    const sub = supabase.channel('heures')
+    const sub = supabase.channel('heures-' + (giteId || 'all'))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'gite_heures_sessions' }, fetch)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'gite_paiements' }, fetch)
       .subscribe()
@@ -55,6 +57,16 @@ export function useHeures(giteId = null) {
 
   const addSession = async ({ gite_id, passage_id = null, duree_minutes, date_session, note = '' }) => {
     await supabase.from('gite_heures_sessions').insert({ gite_id, passage_id, duree_minutes, date_session, note })
+    // Si mode taux_horaire ou forfait, créer automatiquement un montant dû
+    const { data: gite } = await supabase.from('gite_gites').select('mode_suivi, taux_horaire, forfait_montant').eq('id', gite_id).single()
+    if (gite && gite.mode_suivi === 'taux_horaire' && gite.taux_horaire > 0) {
+      const montant = (duree_minutes / 60) * gite.taux_horaire
+      await supabase.from('gite_montants_dus').insert({
+        gite_id, montant: Math.round(montant * 100) / 100,
+        description: `${formatMinutes(duree_minutes)} @ ${gite.taux_horaire}€/h`,
+        date_prestation: date_session,
+      })
+    }
     await fetch()
   }
 
@@ -68,72 +80,82 @@ export function useHeures(giteId = null) {
     await fetch()
   }
 
-  // Clôturer et payer : archive les sessions non payées d'un gîte
+  // Archiver une sélection de sessions (mode amiable)
+  const archiverSelection = async (gite_id, sessionIds, versementIds, note = '') => {
+    const selectedSessions  = sessions.filter(s => sessionIds.includes(s.id))
+    const totalMin = selectedSessions.reduce((s, x) => s + x.duree_minutes, 0)
+    if (totalMin === 0) return
+
+    const dates = selectedSessions.map(s => s.date_session).sort()
+    await supabase.from('gite_paiements').insert({
+      gite_id,
+      total_minutes: totalMin,
+      periode_debut: dates[0],
+      periode_fin: dates[dates.length - 1],
+      date_paiement: new Date().toISOString().split('T')[0],
+      note,
+    })
+    // Supprimer sessions et versements sélectionnés
+    if (sessionIds.length > 0)
+      await supabase.from('gite_heures_sessions').delete().in('id', sessionIds)
+    if (versementIds.length > 0)
+      await supabase.from('gite_versements').delete().in('id', versementIds)
+    await fetch()
+  }
+
+  // Clôturer tout (mode taux fixe)
   const payerGite = async (gite_id, note = '') => {
     const unpaid = sessions.filter(s => s.gite_id === gite_id)
     if (unpaid.length === 0) return
     const total = unpaid.reduce((acc, s) => acc + s.duree_minutes, 0)
     const dates = unpaid.map(s => s.date_session).sort()
     await supabase.from('gite_paiements').insert({
-      gite_id,
-      total_minutes: total,
+      gite_id, total_minutes: total,
       periode_debut: dates[0],
       periode_fin: dates[dates.length - 1],
       date_paiement: new Date().toISOString().split('T')[0],
       note,
     })
-    // Supprimer les sessions archivées
     await supabase.from('gite_heures_sessions').delete().eq('gite_id', gite_id)
     await fetch()
   }
 
-  // Stats agrégées — sessions non payées par gîte
   const statsByGite = () => {
     const map = {}
     sessions.forEach(s => {
-      if (!map[s.gite_id]) map[s.gite_id] = { gite_id: s.gite_id, nom: s.gites?.nom, minutes: 0, count: 0 }
+      if (!map[s.gite_id]) map[s.gite_id] = { gite_id: s.gite_id, nom: s.gite_gites?.nom, proprietaire: s.gite_gites?.proprietaire, minutes: 0, count: 0 }
       map[s.gite_id].minutes += s.duree_minutes
       map[s.gite_id].count++
     })
     return Object.values(map)
   }
 
-  // Stats par mois (toutes sessions + paiements confondus)
   const statsByMonth = () => {
     const map = {}
-    // Sessions en cours
     sessions.forEach(s => {
-      const key = s.date_session.slice(0, 7) // YYYY-MM
+      const key = s.date_session.slice(0, 7)
       if (!map[key]) map[key] = { month: key, minutes: 0 }
       map[key].minutes += s.duree_minutes
     })
-    // Paiements archivés
     paiements.forEach(p => {
       const key = p.periode_fin.slice(0, 7)
       if (!map[key]) map[key] = { month: key, minutes: 0 }
       map[key].minutes += p.total_minutes
     })
-    return Object.entries(map)
-      .sort(([a], [b]) => b.localeCompare(a))
-      .map(([, v]) => v)
+    return Object.entries(map).sort(([a],[b]) => b.localeCompare(a)).map(([,v]) => v)
   }
 
   const statsByYear = () => {
     const map = {}
-    sessions.forEach(s => {
-      const y = s.date_session.slice(0, 4)
-      map[y] = (map[y] || 0) + s.duree_minutes
-    })
-    paiements.forEach(p => {
-      const y = p.periode_fin.slice(0, 4)
-      map[y] = (map[y] || 0) + p.total_minutes
-    })
-    return Object.entries(map).sort(([a], [b]) => b.localeCompare(a)).map(([year, minutes]) => ({ year, minutes }))
+    sessions.forEach(s => { const y = s.date_session.slice(0,4); map[y] = (map[y]||0) + s.duree_minutes })
+    paiements.forEach(p => { const y = p.periode_fin.slice(0,4); map[y] = (map[y]||0) + p.total_minutes })
+    return Object.entries(map).sort(([a],[b]) => b.localeCompare(a)).map(([year,minutes]) => ({ year, minutes }))
   }
 
   return {
     sessions, paiements, loading,
-    addSession, deleteSession, deletePaiement, payerGite,
+    addSession, deleteSession, deletePaiement,
+    archiverSelection, payerGite,
     statsByGite, statsByMonth, statsByYear,
     refresh: fetch,
   }
