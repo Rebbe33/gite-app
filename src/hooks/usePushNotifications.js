@@ -28,7 +28,7 @@ export function usePushNotifications() {
 
   async function checkExistingSubscription() {
     try {
-      const reg = await navigator.serviceWorker.getRegistration('/sw.js')
+      const reg = await navigator.serviceWorker.getRegistration('/sw2.js')
       if (!reg) return
       const sub = await reg.pushManager.getSubscription()
       setSubscribed(!!sub)
@@ -47,7 +47,7 @@ export function usePushNotifications() {
     setLoading(true)
     try {
       // Enregistrer le service worker
-      const reg = await navigator.serviceWorker.register('/sw.js')
+      const reg = await navigator.serviceWorker.register('/sw2.js')
       await navigator.serviceWorker.ready
 
       // Demander permission
@@ -99,7 +99,7 @@ export function usePushNotifications() {
   async function unsubscribe() {
     setLoading(true)
     try {
-      const reg = await navigator.serviceWorker.getRegistration('/sw.js')
+      const reg = await navigator.serviceWorker.getRegistration('/sw2.js')
       if (!reg) return
       const sub = await reg.pushManager.getSubscription()
       if (sub) {
