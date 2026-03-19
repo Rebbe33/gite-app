@@ -1,9 +1,11 @@
 import { useState } from 'react'
-import { Calendar, ClipboardList, Package, StickyNote, Clock, Plus, Settings, X, Check, Pencil, Trash2, Upload } from 'lucide-react'
+import { Calendar, ClipboardList, Package, StickyNote, Clock, LayoutDashboard, Euro, Plus, Settings, X, Check, Pencil, Trash2, Upload } from 'lucide-react'
 import { useGites } from './hooks/useGites'
 import { parseTasksExcel } from './lib/excel'
 
-import Planning from './pages/Planning'
+import Planning   from './pages/Planning'
+import Dashboard  from './pages/Dashboard'
+import Finances   from './pages/Finances'
 import Heures   from './pages/Heures'
 import NotifSettings from './components/NotifSettings'
 import Menage   from './pages/Menage'
@@ -110,8 +112,9 @@ function GiteApp({ gite, tab, setTab }) {
       {tab === 'planning'  && <Planning giteId={gite.id} />}
       {tab === 'menage'    && <Menage   giteId={gite.id} />}
       {tab === 'stocks'    && <Stocks   giteId={gite.id} />}
-      {tab === 'notes'     && <Notes    giteId={gite.id} giteName={gite.nom} />}
-      {tab === 'heures'    && <Heures />}
+      {tab === 'notes'     && <Notes     giteId={gite.id} giteName={gite.nom} />}
+      {tab === 'heures'    && <Heures    giteId={gite.id} />}
+      {tab === 'finances'  && <Finances  giteId={gite.id} />}
     </main>
   )
 }
@@ -147,9 +150,9 @@ export default function App() {
   const handleAddGite = async (name, tasks) => {
     const gite = await addGite(name)
     if (tasks.length > 0) {
-      const { supabase: sb } = await import('./lib/supabase')
+      const { supabase } = await import('./lib/supabase.js')
       const toInsert = tasks.map(t => ({ ...t, gite_id: gite.id }))
-      await sb.from('tasks').insert(toInsert)
+      await supabase.from('gite_tasks').insert(toInsert)
     }
     setActiveGiteId(gite.id)
     setShowAddGite(false)
@@ -207,7 +210,7 @@ export default function App() {
           </button>
         </div>
       ) : (
-        activeGite && <GiteApp gite={activeGite} tab={tab} setTab={setTab} />
+        tab === 'dashboard' ? <main className="main"><Dashboard /></main> : activeGite && <GiteApp gite={activeGite} tab={tab} setTab={setTab} />
       )}
 
       {/* NAV */}
