@@ -264,8 +264,8 @@ export default function App() {
           </div>
         </div>
 
-        {/* Sélecteur gîtes */}
-        {gites.length > 0 && (
+        {/* Sélecteur gîtes - caché sur dashboard */}
+        {gites.length > 0 && tab !== 'dashboard' && (
           <div className="gite-tabs">
             {gites.map(g => (
               <button key={g.id}
@@ -277,8 +277,8 @@ export default function App() {
           </div>
         )}
 
-        {/* Nom gîte actif */}
-        {activeGite && (
+        {/* Nom gîte actif - caché sur dashboard */}
+        {activeGite && tab !== 'dashboard' && (
           <div className="active-gite-name">{activeGite.nom}</div>
         )}
       </header>
@@ -297,7 +297,7 @@ export default function App() {
       )}
 
       {/* NAV */}
-      {gites.length > 0 && (
+      {gites.length > 0 && tab !== 'dashboard' && (
         <nav className="nav">
           {[
             { id: 'planning', label: 'Planning', Icon: Calendar },
