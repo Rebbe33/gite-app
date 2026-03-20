@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
-import { formatMinutes } from './useHeures'
 
 export function useFinances(giteId = null) {
-  const [montantsDus, setMontantsDus] = useState([])
-  const [versements, setVersements]   = useState([])
-  const [loading, setLoading]         = useState(true)
+  const [montantsDus, setMontantsDus]         = useState([])
+  const [versements, setVersements]           = useState([])
+  const [versementsHisto, setVersementsHisto] = useState([])
+  const [loading, setLoading]                 = useState(true)
 
   const fetch = useCallback(async () => {
     setLoading(true)
@@ -15,10 +15,18 @@ export function useFinances(giteId = null) {
     let vq = supabase.from('gite_versements')
       .select('*, gite_gites(nom, mode_suivi, proprietaire)')
       .order('date_versement', { ascending: false })
-    if (giteId) { mq = mq.eq('gite_id', giteId); vq = vq.eq('gite_id', giteId) }
-    const [{ data: m }, { data: v }] = await Promise.all([mq, vq])
+    let hq = supabase.from('gite_versements_historique')
+      .select('*, gite_gites(nom)')
+      .order('date_versement', { ascending: false })
+    if (giteId) {
+      mq = mq.eq('gite_id', giteId)
+      vq = vq.eq('gite_id', giteId)
+      hq = hq.eq('gite_id', giteId)
+    }
+    const [{ data: m }, { data: v }, { data: h }] = await Promise.all([mq, vq, hq])
     setMontantsDus(m || [])
     setVersements(v || [])
+    setVersementsHisto(h || [])
     setLoading(false)
   }, [giteId])
 
@@ -28,6 +36,7 @@ export function useFinances(giteId = null) {
     const sub = supabase.channel(`finances-${chanId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'gite_montants_dus' }, fetch)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'gite_versements' }, fetch)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'gite_versements_historique' }, fetch)
       .subscribe()
     return () => supabase.removeChannel(sub)
   }, [fetch])
@@ -42,32 +51,29 @@ export function useFinances(giteId = null) {
     await fetch()
   }
 
-  // Ajoute un versement et archive automatiquement les sessions couvertes
+  const deleteVersementHisto = async (id) => {
+    await supabase.from('gite_versements_historique').delete().eq('id', id)
+    await fetch()
+  }
+
   const addVersement = async ({ gite_id, montant, date_versement, note }) => {
-    // Récupérer infos du gîte
     const { data: gite } = await supabase.from('gite_gites')
       .select('mode_suivi, taux_horaire, forfait_montant')
       .eq('id', gite_id).single()
 
     if (!gite || gite.mode_suivi === 'amiable') {
-      // Mode amiable : juste stocker le versement tel quel
       await supabase.from('gite_versements').insert({ gite_id, montant, date_versement, note })
       await fetch()
       return
     }
 
-    // Récupérer les versements non consommés (reliquats précédents)
+    // Récupérer reliquats précédents + sessions
     const { data: versementsExistants } = await supabase
-      .from('gite_versements')
-      .select('*')
-      .eq('gite_id', gite_id)
+      .from('gite_versements').select('*').eq('gite_id', gite_id)
       .order('date_versement', { ascending: true })
 
-    // Récupérer les sessions non archivées, triées par date
     const { data: sessions } = await supabase
-      .from('gite_heures_sessions')
-      .select('*')
-      .eq('gite_id', gite_id)
+      .from('gite_heures_sessions').select('*').eq('gite_id', gite_id)
       .order('date_session', { ascending: true })
 
     const getMontantSession = (s) => {
@@ -78,12 +84,10 @@ export function useFinances(giteId = null) {
       return 0
     }
 
-    // Total disponible = reliquats précédents + nouveau versement
     const totalReliquats = (versementsExistants || []).reduce((s, v) => s + Number(v.montant), 0)
     let budget = Math.round((totalReliquats + Number(montant)) * 100) / 100
 
     const sessionsAArchiver = []
-
     for (const session of (sessions || [])) {
       const montantSession = getMontantSession(session)
       if (montantSession <= 0) continue
@@ -98,50 +102,48 @@ export function useFinances(giteId = null) {
     if (sessionsAArchiver.length > 0) {
       const dates    = sessionsAArchiver.map(s => s.date_session).sort()
       const totalMin = sessionsAArchiver.reduce((s, x) => s + x.duree_minutes, 0)
-
       await supabase.from('gite_paiements').insert({
-        gite_id,
-        total_minutes: totalMin,
-        periode_debut: dates[0],
-        periode_fin:   dates[dates.length - 1],
+        gite_id, total_minutes: totalMin,
+        periode_debut: dates[0], periode_fin: dates[dates.length - 1],
         date_paiement: date_versement,
         note: `Archivage auto — ${sessionsAArchiver.length} session(s)${note ? ' · ' + note : ''}`,
       })
-
       await supabase.from('gite_heures_sessions')
         .delete().in('id', sessionsAArchiver.map(s => s.id))
-
-      // Supprimer les montants dus correspondants
       for (const session of sessionsAArchiver) {
         const { data: mdus } = await supabase.from('gite_montants_dus')
           .select('id').eq('gite_id', gite_id)
           .gte('montant', session.montantSession - 0.01)
-          .lte('montant', session.montantSession + 0.01)
-          .limit(1)
+          .lte('montant', session.montantSession + 0.01).limit(1)
         if (mdus && mdus.length > 0)
           await supabase.from('gite_montants_dus').delete().eq('id', mdus[0].id)
       }
     }
 
-    // Supprimer TOUS les anciens versements et stocker uniquement le reliquat
-    if (versementsExistants && versementsExistants.length > 0) {
-      await supabase.from('gite_versements')
-        .delete().in('id', versementsExistants.map(v => v.id))
-    }
+    // Calculer montant consommé
+    const montantConsomme = Math.round((Number(montant) + totalReliquats - budget) * 100) / 100
 
-    // Stocker le reliquat restant (ou 0 si tout est consommé)
+    // Enregistrer dans l'historique
+    await supabase.from('gite_versements_historique').insert({
+      gite_id,
+      montant_brut: Number(montant),
+      montant_consomme: Math.min(montantConsomme, Number(montant)),
+      reliquat: Math.max(0, Math.round(budget * 100) / 100),
+      date_versement,
+      note: note || '',
+      nb_sessions_archivees: sessionsAArchiver.length,
+    })
+
+    // Supprimer anciens reliquats et stocker le nouveau
+    if (versementsExistants && versementsExistants.length > 0)
+      await supabase.from('gite_versements').delete().in('id', versementsExistants.map(v => v.id))
+
     const reliquat = Math.round(budget * 100) / 100
     if (reliquat > 0.01) {
       await supabase.from('gite_versements').insert({
-        gite_id,
-        montant: reliquat,
-        date_versement,
+        gite_id, montant: reliquat, date_versement,
         note: `Reliquat${note ? ' · ' + note : ''}`,
       })
-    } else {
-      // Rien à stocker — tout a été consommé, on insère quand même pour la trace
-      // mais avec montant = 0 seulement si on veut garder la trace, sinon on skippe
-      // Ici on ne stocke rien si reliquat = 0
     }
 
     await fetch()
@@ -183,9 +185,9 @@ export function useFinances(giteId = null) {
   const soldeGlobal = totalDu - totalRecu
 
   return {
-    montantsDus, versements, loading,
+    montantsDus, versements, versementsHisto, loading,
     addMontantDu, deleteMontantDu,
-    addVersement, deleteVersement,
+    addVersement, deleteVersement, deleteVersementHisto,
     soldeByGite, soldeByProprietaire,
     totalDu, totalRecu, soldeGlobal,
     refresh: fetch,
