@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, Trash2, X, Check, Clock, TrendingUp, ChevronDown, ChevronUp, Euro, Archive } from 'lucide-react'
+import { Plus, Trash2, X, Check, Clock, TrendingUp, ChevronDown, ChevronUp, Archive } from 'lucide-react'
 import { useHeures, parseduree, formatMinutes } from '../hooks/useHeures'
 import { useVersements } from '../hooks/useVersements'
 import { useGites } from '../hooks/useGites'
@@ -11,7 +11,7 @@ function formatMonth(str) {
 }
 function fmt(n) { return Number(n).toFixed(2).replace('.', ',') + ' €' }
 
-function AddSessionModal({ giteId, giteName, onSave, onClose }) {
+function AddSessionModal({ giteId, giteName, gite, onSave, onClose }) {
   const today = new Date().toISOString().split('T')[0]
   const [form, setForm] = useState({ duree: '', date_session: today, note: '' })
   const [error, setError] = useState('')
@@ -28,6 +28,16 @@ function AddSessionModal({ giteId, giteName, onSave, onClose }) {
           <h2 className="modal-title">Ajouter des heures — {giteName}</h2>
           <button className="icon-btn" onClick={onClose}><X size={18}/></button>
         </div>
+        {gite?.mode_suivi === 'taux_horaire' && gite.taux_horaire > 0 && (
+          <div className="fin-heures-row" style={{marginBottom:8}}>
+            <span>Taux : {gite.taux_horaire}€/h — montant dû calculé automatiquement</span>
+          </div>
+        )}
+        {gite?.mode_suivi === 'forfait' && gite.forfait_montant > 0 && (
+          <div className="fin-heures-row" style={{marginBottom:8}}>
+            <span>Forfait : {gite.forfait_montant}€ par passage</span>
+          </div>
+        )}
         <div className="form-grid">
           <div className="form-field">
             <label>Durée</label>
@@ -53,7 +63,7 @@ function AddSessionModal({ giteId, giteName, onSave, onClose }) {
   )
 }
 
-function AddVersementModal({ giteId, giteName, isAmiable, onSave, onClose }) {
+function AddVersementModal({ giteId, giteName, onSave, onClose }) {
   const today = new Date().toISOString().split('T')[0]
   const [form, setForm] = useState({ montant: '', date_versement: today, note: '', nb_heures_couvertes: '' })
   const [error, setError] = useState('')
@@ -80,13 +90,11 @@ function AddVersementModal({ giteId, giteName, isAmiable, onSave, onClose }) {
             <label>Date</label>
             <input type="date" value={form.date_versement} onChange={e => set('date_versement', e.target.value)}/>
           </div>
-          {isAmiable && (
-            <div className="form-field">
-              <label>Heures couvertes <span style={{color:'#9c9890'}}>(optionnel)</span></label>
-              <input type="number" step="0.5" min="0" value={form.nb_heures_couvertes}
-                onChange={e => set('nb_heures_couvertes', e.target.value)} placeholder="ex: 6"/>
-            </div>
-          )}
+          <div className="form-field">
+            <label>Heures couvertes <span style={{color:'#9c9890'}}>(optionnel)</span></label>
+            <input type="number" step="0.5" min="0" value={form.nb_heures_couvertes}
+              onChange={e => set('nb_heures_couvertes', e.target.value)} placeholder="ex: 6"/>
+          </div>
           <div className="form-field full">
             <label>Note</label>
             <input value={form.note} onChange={e => set('note', e.target.value)} placeholder="Espèces, virement..."/>
@@ -105,13 +113,10 @@ function ArchiverModal({ gite, sessions, versements, onArchive, onClose }) {
   const [selectedSessions, setSelectedSessions]     = useState(sessions.map(s => s.id))
   const [selectedVersements, setSelectedVersements] = useState(versements.map(v => v.id))
   const [note, setNote] = useState('')
-
   const toggleS = id => setSelectedSessions(p => p.includes(id) ? p.filter(x=>x!==id) : [...p,id])
   const toggleV = id => setSelectedVersements(p => p.includes(id) ? p.filter(x=>x!==id) : [...p,id])
-
   const totalMin   = sessions.filter(s => selectedSessions.includes(s.id)).reduce((s,x)=>s+x.duree_minutes,0)
   const totalVerse = versements.filter(v => selectedVersements.includes(v.id)).reduce((s,v)=>s+Number(v.montant),0)
-
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={e=>e.stopPropagation()} style={{maxHeight:'85dvh',overflowY:'auto'}}>
@@ -215,16 +220,18 @@ export default function Heures({ giteId }) {
           <div className="heures-total-card">
             <div>
               <div className="heures-total-label">Heures non réglées</div>
-              {hCouvertes > 0 && <div style={{fontSize:12,color:'var(--sage)',marginTop:3}}>{hCouvertes}h couvertes par versements</div>}
-              {totalVerse > 0 && <div style={{fontSize:12,color:'var(--sage)',marginTop:2}}>{fmt(totalVerse)} reçus</div>}
+              {isAmiable && hCouvertes > 0 && <div style={{fontSize:12,color:'var(--sage)',marginTop:3}}>{hCouvertes}h couvertes par versements</div>}
+              {isAmiable && totalVerse > 0 && <div style={{fontSize:12,color:'var(--sage)',marginTop:2}}>{fmt(totalVerse)} reçus</div>}
             </div>
             <div className="heures-total-val">{formatMinutes(totalCourant)}</div>
           </div>
 
-          <button className="btn-outline-sm" style={{marginBottom:10,width:'100%',justifyContent:'center'}}
-            onClick={() => setArchiverData({ gite, sessions, versements })}>
-            <Archive size={13}/> Archiver une sélection
-          </button>
+          {isAmiable && (
+            <button className="btn-outline-sm" style={{marginBottom:10,width:'100%',justifyContent:'center'}}
+              onClick={() => setArchiverData({ gite, sessions, versements })}>
+              <Archive size={13}/> Archiver une sélection
+            </button>
+          )}
 
           {sessions.length > 0 && (
             <div className="card">
@@ -248,30 +255,31 @@ export default function Heures({ giteId }) {
           )}
 
           {isAmiable && (
-          <div className="card">
-            <div className="card-header" style={{cursor:'pointer'}} onClick={()=>setShowVersements(v=>!v)}>
-              <span className="card-title">Versements reçus ({versements.length})</span>
-              {showVersements?<ChevronUp size={15} color="#9c9890"/>:<ChevronDown size={15} color="#9c9890"/>}
-            </div>
-            {showVersements && (
-              <>
-                {versements.length===0 && <p className="empty-text">Aucun versement.</p>}
-                {versements.map(v=>(
-                  <div key={v.id} className="session-item">
-                    <div className="session-left">
-                      <div className="session-meta">
-                        {new Date(v.date_versement).toLocaleDateString('fr-FR',{day:'numeric',month:'short',year:'numeric'})}
-                        {v.nb_heures_couvertes && ` · couvre ${v.nb_heures_couvertes}h`}
-                        {v.note && ` · ${v.note}`}
+            <div className="card">
+              <div className="card-header" style={{cursor:'pointer'}} onClick={()=>setShowVersements(v=>!v)}>
+                <span className="card-title">Versements reçus ({versements.length})</span>
+                {showVersements?<ChevronUp size={15} color="#9c9890"/>:<ChevronDown size={15} color="#9c9890"/>}
+              </div>
+              {showVersements && (
+                <>
+                  {versements.length===0 && <p className="empty-text">Aucun versement.</p>}
+                  {versements.map(v=>(
+                    <div key={v.id} className="session-item">
+                      <div className="session-left">
+                        <div className="session-meta">
+                          {new Date(v.date_versement).toLocaleDateString('fr-FR',{day:'numeric',month:'short',year:'numeric'})}
+                          {v.nb_heures_couvertes && ` · couvre ${v.nb_heures_couvertes}h`}
+                          {v.note && ` · ${v.note}`}
+                        </div>
                       </div>
+                      <span className="heures-badge green">{fmt(v.montant)}</span>
+                      <button className="icon-btn-xs danger" onClick={()=>window.confirm('Supprimer ?')&&removeVersement(v.id)}><Trash2 size={12}/></button>
                     </div>
-                    <span className="heures-badge green">{fmt(v.montant)}</span>
-                    <button className="icon-btn-xs danger" onClick={()=>window.confirm('Supprimer ?')&&removeVersement(v.id)}><Trash2 size={12}/></button>
-                  </div>
-                ))}
-              </>
-            )}
-          </div>
+                  ))}
+                </>
+              )}
+            </div>
+          )}
 
           {isAmiable ? (
             <div style={{display:'flex',gap:8}}>
@@ -343,12 +351,12 @@ export default function Heures({ giteId }) {
       )}
 
       {showAdd && (
-        <AddSessionModal giteId={giteId} giteName={gite?.nom}
+        <AddSessionModal giteId={giteId} giteName={gite?.nom} gite={gite}
           onSave={async f=>{await addSession(f);setShowAdd(false)}}
           onClose={()=>setShowAdd(false)}/>
       )}
-      {showAddVersement && (
-        <AddVersementModal giteId={giteId} giteName={gite?.nom} isAmiable={isAmiable}
+      {showAddVersement && isAmiable && (
+        <AddVersementModal giteId={giteId} giteName={gite?.nom}
           onSave={async f=>{await addVersement(f);setShowAddVersement(false)}}
           onClose={()=>setShowAddVersement(false)}/>
       )}
