@@ -48,7 +48,8 @@ export function useHeures(giteId = null) {
 
   useEffect(() => {
     fetch()
-    const sub = supabase.channel('heures-' + (giteId || 'all'))
+    const chanId = giteId || 'all'
+    const sub = supabase.channel(`heures-${chanId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'gite_heures_sessions' }, fetch)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'gite_paiements' }, fetch)
       .subscribe()
@@ -57,12 +58,16 @@ export function useHeures(giteId = null) {
 
   const addSession = async ({ gite_id, passage_id = null, duree_minutes, date_session, note = '' }) => {
     await supabase.from('gite_heures_sessions').insert({ gite_id, passage_id, duree_minutes, date_session, note })
-    // Si mode taux_horaire ou forfait, créer automatiquement un montant dû
-    const { data: gite } = await supabase.from('gite_gites').select('mode_suivi, taux_horaire, forfait_montant').eq('id', gite_id).single()
-    if (gite && gite.mode_suivi === 'taux_horaire' && gite.taux_horaire > 0) {
-      const montant = (duree_minutes / 60) * gite.taux_horaire
+
+    // Auto-calcul montant dû pour taux horaire
+    const { data: gite } = await supabase.from('gite_gites')
+      .select('mode_suivi, taux_horaire, forfait_montant')
+      .eq('id', gite_id).single()
+
+    if (gite?.mode_suivi === 'taux_horaire' && gite.taux_horaire > 0) {
+      const montant = Math.round((duree_minutes / 60) * gite.taux_horaire * 100) / 100
       await supabase.from('gite_montants_dus').insert({
-        gite_id, montant: Math.round(montant * 100) / 100,
+        gite_id, montant,
         description: `${formatMinutes(duree_minutes)} @ ${gite.taux_horaire}€/h`,
         date_prestation: date_session,
       })
@@ -71,6 +76,16 @@ export function useHeures(giteId = null) {
   }
 
   const deleteSession = async (id) => {
+    // Supprimer aussi le montant dû associé si taux horaire
+    const session = sessions.find(s => s.id === id)
+    if (session?.gite_gites?.mode_suivi === 'taux_horaire') {
+      // Supprimer le montant dû correspondant à cette session (même date, même gite)
+      await supabase.from('gite_montants_dus')
+        .delete()
+        .eq('gite_id', session.gite_id)
+        .eq('date_prestation', session.date_session)
+        .like('description', `${formatMinutes(session.duree_minutes)}%`)
+    }
     await supabase.from('gite_heures_sessions').delete().eq('id', id)
     await fetch()
   }
@@ -80,9 +95,9 @@ export function useHeures(giteId = null) {
     await fetch()
   }
 
-  // Archiver une sélection de sessions (mode amiable)
+  // Archiver une sélection + archivage auto si versement >= montant dû
   const archiverSelection = async (gite_id, sessionIds, versementIds, note = '') => {
-    const selectedSessions  = sessions.filter(s => sessionIds.includes(s.id))
+    const selectedSessions = sessions.filter(s => sessionIds.includes(s.id))
     const totalMin = selectedSessions.reduce((s, x) => s + x.duree_minutes, 0)
     if (totalMin === 0) return
 
@@ -95,7 +110,6 @@ export function useHeures(giteId = null) {
       date_paiement: new Date().toISOString().split('T')[0],
       note,
     })
-    // Supprimer sessions et versements sélectionnés
     if (sessionIds.length > 0)
       await supabase.from('gite_heures_sessions').delete().in('id', sessionIds)
     if (versementIds.length > 0)
@@ -103,21 +117,13 @@ export function useHeures(giteId = null) {
     await fetch()
   }
 
-  // Clôturer tout (mode taux fixe)
-  const payerGite = async (gite_id, note = '') => {
-    const unpaid = sessions.filter(s => s.gite_id === gite_id)
-    if (unpaid.length === 0) return
-    const total = unpaid.reduce((acc, s) => acc + s.duree_minutes, 0)
-    const dates = unpaid.map(s => s.date_session).sort()
-    await supabase.from('gite_paiements').insert({
-      gite_id, total_minutes: total,
-      periode_debut: dates[0],
-      periode_fin: dates[dates.length - 1],
-      date_paiement: new Date().toISOString().split('T')[0],
-      note,
-    })
-    await supabase.from('gite_heures_sessions').delete().eq('gite_id', gite_id)
-    await fetch()
+  // Archivage automatique quand versement >= montant dû (taux fixe)
+  const archiverAuto = async (gite_id) => {
+    const giteSessions = sessions.filter(s => s.gite_id === gite_id)
+    if (giteSessions.length === 0) return
+    const sessionIds   = giteSessions.map(s => s.id)
+    const versementIds = [] // versements gérés séparément dans useFinances
+    await archiverSelection(gite_id, sessionIds, versementIds, 'Archivage automatique')
   }
 
   const statsByGite = () => {
@@ -155,7 +161,7 @@ export function useHeures(giteId = null) {
   return {
     sessions, paiements, loading,
     addSession, deleteSession, deletePaiement,
-    archiverSelection, payerGite,
+    archiverSelection, archiverAuto,
     statsByGite, statsByMonth, statsByYear,
     refresh: fetch,
   }
