@@ -92,7 +92,7 @@ export default function Finances({ giteId }) {
   const { gites } = useGites()
   const gite = gites.find(g => g.id === giteId)
   const { montantsDus, versements, loading, addMontantDu, deleteMontantDu, addVersement, deleteVersement, totalDu, totalRecu } = useFinances(giteId)
-  const { sessions, archiverAuto } = useHeures(giteId)
+  const { sessions } = useHeures(giteId)
   const [showAddDu, setShowAddDu]               = useState(false)
   const [showAddVersement, setShowAddVersement] = useState(false)
   const [activeTab, setActiveTab]               = useState('solde')
@@ -100,14 +100,10 @@ export default function Finances({ giteId }) {
   const solde = totalDu - totalRecu
   const totalHeures = sessions.reduce((s, h) => s + h.duree_minutes, 0)
 
-  // Auto-archivage quand versement >= montant dû
+  // L'archivage auto est géré directement dans useFinances.addVersement
   const handleAddVersement = async (form) => {
     await addVersement(form)
     setShowAddVersement(false)
-    const newRecu = totalRecu + form.montant
-    if (newRecu >= totalDu && totalDu > 0 && sessions.length > 0) {
-      await archiverAuto(giteId)
-    }
   }
 
   if (loading) return <div className="loading">Chargement...</div>
