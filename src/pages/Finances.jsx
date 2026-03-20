@@ -1,8 +1,7 @@
-import { useState } from 'react'
-import { Plus, Trash2, X, Check, Euro, Clock } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Plus, Trash2, X, Check, Clock } from 'lucide-react'
 import { useFinances } from '../hooks/useFinances'
 import { useHeures, formatMinutes } from '../hooks/useHeures'
-import { useVersements } from '../hooks/useVersements'
 import { useGites } from '../hooks/useGites'
 
 function fmt(n) { return Number(n).toFixed(2).replace('.', ',') + ' €' }
@@ -36,7 +35,7 @@ function AddMontantModal({ giteId, giteName, onSave, onClose }) {
           </div>
           <div className="form-field full">
             <label>Description</label>
-            <input value={form.description} onChange={e => set('description', e.target.value)} placeholder="Ménage complet, passage #3..."/>
+            <input value={form.description} onChange={e => set('description', e.target.value)} placeholder="Ménage complet..."/>
           </div>
         </div>
         <div className="modal-actions">
@@ -92,28 +91,26 @@ function AddVersementModal({ giteId, giteName, onSave, onClose }) {
 export default function Finances({ giteId }) {
   const { gites } = useGites()
   const gite = gites.find(g => g.id === giteId)
-  const { montantsDus, versements: finVersements, loading, addMontantDu, deleteMontantDu, addVersement: addFinVersement, deleteVersement, totalDu, totalRecu, soldeGlobal } = useFinances(giteId)
-  const { sessions } = useHeures(giteId)
-  const { versements, add: addVersement, remove: removeVersement } = useVersements(giteId)
+  const { montantsDus, versements, loading, addMontantDu, deleteMontantDu, addVersement, deleteVersement, totalDu, totalRecu } = useFinances(giteId)
+  const { sessions, archiverAuto } = useHeures(giteId)
   const [showAddDu, setShowAddDu]               = useState(false)
   const [showAddVersement, setShowAddVersement] = useState(false)
   const [activeTab, setActiveTab]               = useState('solde')
-  const [proposeArchive, setProposeArchive]     = useState(false)
-
-  if (loading) return <div className="loading">Chargement...</div>
 
   const solde = totalDu - totalRecu
   const totalHeures = sessions.reduce((s, h) => s + h.duree_minutes, 0)
 
+  // Auto-archivage quand versement >= montant dû
   const handleAddVersement = async (form) => {
-    await addFinVersement(form)
+    await addVersement(form)
     setShowAddVersement(false)
-    // Proposer archivage si versement >= solde restant
     const newRecu = totalRecu + form.montant
-    if (newRecu >= totalDu && totalDu > 0) {
-      setProposeArchive(true)
+    if (newRecu >= totalDu && totalDu > 0 && sessions.length > 0) {
+      await archiverAuto(giteId)
     }
   }
+
+  if (loading) return <div className="loading">Chargement...</div>
 
   return (
     <div>
@@ -123,7 +120,6 @@ export default function Finances({ giteId }) {
         <button className={`toggle-btn ${activeTab==='versements'?'active':''}`} onClick={() => setActiveTab('versements')}>Versements</button>
       </div>
 
-      {/* ── SOLDE ── */}
       {activeTab === 'solde' && (
         <>
           <div className="fin-summary">
@@ -148,22 +144,11 @@ export default function Finances({ giteId }) {
           {totalHeures > 0 && (
             <div className="fin-heures-row">
               <Clock size={14} color="var(--text-2)"/>
-              <span>{formatMinutes(totalHeures)} travaillées (heures saisies dans l'onglet Heures)</span>
+              <span>{formatMinutes(totalHeures)} travaillées (voir onglet Heures)</span>
             </div>
           )}
 
-          {proposeArchive && (
-            <div className="alert-banner" style={{ background:'var(--sage-light)', color:'var(--sage)' }}>
-              <Check size={14}/>
-              <span>Le versement couvre le montant dû.</span>
-              <button className="btn-primary-sm" style={{ marginLeft:'auto' }}
-                onClick={() => { setProposeArchive(false) }}>
-                Archiver dans Heures
-              </button>
-            </div>
-          )}
-
-          <div style={{ display:'flex', gap:8, marginTop:4 }}>
+          <div style={{ display:'flex', gap:8, marginTop:8 }}>
             <button className="btn-add-item" style={{ flex:1 }} onClick={() => setShowAddDu(true)}>
               <Plus size={14}/> Montant dû
             </button>
@@ -174,7 +159,6 @@ export default function Finances({ giteId }) {
         </>
       )}
 
-      {/* ── MONTANTS DUS ── */}
       {activeTab === 'dus' && (
         <>
           <button className="btn-add-item" onClick={() => setShowAddDu(true)}>
@@ -200,15 +184,14 @@ export default function Finances({ giteId }) {
         </>
       )}
 
-      {/* ── VERSEMENTS ── */}
       {activeTab === 'versements' && (
         <>
           <button className="btn-add-item" style={{ color:'var(--sage)' }} onClick={() => setShowAddVersement(true)}>
             <Plus size={14}/> Enregistrer un versement reçu
           </button>
           <div className="card">
-            {finVersements.length === 0 && <p className="empty-text">Aucun versement enregistré.</p>}
-            {finVersements.map(v => (
+            {versements.length === 0 && <p className="empty-text">Aucun versement enregistré.</p>}
+            {versements.map(v => (
               <div key={v.id} className="fin-item">
                 <div className="fin-item-left">
                   <div className="fin-item-title">{v.note || 'Versement'}</div>
