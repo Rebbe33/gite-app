@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
+import { formatMinutes } from './useHeures'
 
 export function useFinances(giteId = null) {
   const [montantsDus, setMontantsDus] = useState([])
@@ -41,8 +42,83 @@ export function useFinances(giteId = null) {
     await fetch()
   }
 
+  // Ajoute un versement et archive automatiquement les sessions couvertes
   const addVersement = async ({ gite_id, montant, date_versement, note }) => {
     await supabase.from('gite_versements').insert({ gite_id, montant, date_versement, note })
+
+    // Récupérer les sessions non archivées + leurs montants dus, triées par date (plus anciennes d'abord)
+    const { data: sessions } = await supabase
+      .from('gite_heures_sessions')
+      .select('*, gite_gites(mode_suivi, taux_horaire, forfait_montant)')
+      .eq('gite_id', gite_id)
+      .order('date_session', { ascending: true })
+
+    const { data: montantsDusList } = await supabase
+      .from('gite_montants_dus')
+      .select('*')
+      .eq('gite_id', gite_id)
+      .order('date_prestation', { ascending: true })
+
+    if (!sessions || sessions.length === 0) { await fetch(); return }
+
+    const gite = sessions[0]?.gite_gites
+    if (!gite || gite.mode_suivi === 'amiable') { await fetch(); return }
+
+    // Calculer le montant par session
+    const getMontantSession = (s) => {
+      if (gite.mode_suivi === 'taux_horaire') {
+        return Math.round((s.duree_minutes / 60) * gite.taux_horaire * 100) / 100
+      }
+      if (gite.mode_suivi === 'forfait') {
+        return gite.forfait_montant || 0
+      }
+      return 0
+    }
+
+    // Consommer le versement sur les sessions (plus anciennes d'abord)
+    let restant = montant
+    const sessionsAArchiver = []
+    const montantsDusASupprimer = []
+
+    for (const session of sessions) {
+      const montantSession = getMontantSession(session)
+      if (montantSession <= 0) continue
+      if (restant >= montantSession) {
+        sessionsAArchiver.push(session)
+        restant -= montantSession
+        // Trouver le montant dû associé à cette session
+        const montantDu = (montantsDusList || []).find(m =>
+          m.date_prestation === session.date_session &&
+          Math.abs(Number(m.montant) - montantSession) < 0.01
+        )
+        if (montantDu) montantsDusASupprimer.push(montantDu.id)
+      }
+      if (restant <= 0) break
+    }
+
+    // Archiver les sessions couvertes
+    if (sessionsAArchiver.length > 0) {
+      const dates = sessionsAArchiver.map(s => s.date_session).sort()
+      const totalMin = sessionsAArchiver.reduce((s, x) => s + x.duree_minutes, 0)
+
+      await supabase.from('gite_paiements').insert({
+        gite_id,
+        total_minutes: totalMin,
+        periode_debut: dates[0],
+        periode_fin: dates[dates.length - 1],
+        date_paiement: date_versement,
+        note: `Archivage auto — versement ${montant}€${note ? ' · ' + note : ''}`,
+      })
+
+      await supabase.from('gite_heures_sessions')
+        .delete().in('id', sessionsAArchiver.map(s => s.id))
+
+      if (montantsDusASupprimer.length > 0) {
+        await supabase.from('gite_montants_dus')
+          .delete().in('id', montantsDusASupprimer)
+      }
+    }
+
     await fetch()
   }
 
@@ -51,7 +127,6 @@ export function useFinances(giteId = null) {
     await fetch()
   }
 
-  // Solde par gîte — ne compte que les montants dus, pas les versements du mode amiable
   const soldeByGite = () => {
     const map = {}
     montantsDus.forEach(m => {
@@ -65,7 +140,6 @@ export function useFinances(giteId = null) {
     return Object.values(map).map(g => ({ ...g, solde: g.du - g.recu }))
   }
 
-  // Regrouper par propriétaire (champ texte)
   const soldeByProprietaire = () => {
     const soldes = soldeByGite()
     const map = {}
