@@ -270,7 +270,7 @@ export default function App() {
             {gites.map(g => (
               <button key={g.id}
                 className={`gite-tab ${g.id === activeGite?.id ? 'active' : ''}`}
-                onClick={() => setActiveGiteId(g.id)}>
+                onClick={() => { setActiveGiteId(g.id); if (tab === 'dashboard') setTab('menage') }}>
                 {g.nom}
               </button>
             ))}
