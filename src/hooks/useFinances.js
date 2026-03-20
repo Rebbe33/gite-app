@@ -8,8 +8,12 @@ export function useFinances(giteId = null) {
 
   const fetch = useCallback(async () => {
     setLoading(true)
-    let mq = supabase.from('gite_montants_dus').select('*, gite_gites(nom, mode_suivi, taux_horaire, forfait_montant, proprietaire)').order('date_prestation', { ascending: false })
-    let vq = supabase.from('gite_versements').select('*, gite_gites(nom, mode_suivi, proprietaire)').order('date_versement', { ascending: false })
+    let mq = supabase.from('gite_montants_dus')
+      .select('*, gite_gites(nom, mode_suivi, taux_horaire, forfait_montant, proprietaire)')
+      .order('date_prestation', { ascending: false })
+    let vq = supabase.from('gite_versements')
+      .select('*, gite_gites(nom, mode_suivi, proprietaire)')
+      .order('date_versement', { ascending: false })
     if (giteId) { mq = mq.eq('gite_id', giteId); vq = vq.eq('gite_id', giteId) }
     const [{ data: m }, { data: v }] = await Promise.all([mq, vq])
     setMontantsDus(m || [])
@@ -19,7 +23,8 @@ export function useFinances(giteId = null) {
 
   useEffect(() => {
     fetch()
-    const sub = supabase.channel('finances-' + (giteId || 'all'))
+    const chanId = giteId || 'all'
+    const sub = supabase.channel(`finances-${chanId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'gite_montants_dus' }, fetch)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'gite_versements' }, fetch)
       .subscribe()
@@ -46,7 +51,7 @@ export function useFinances(giteId = null) {
     await fetch()
   }
 
-  // Solde par gîte
+  // Solde par gîte — ne compte que les montants dus, pas les versements du mode amiable
   const soldeByGite = () => {
     const map = {}
     montantsDus.forEach(m => {
@@ -60,12 +65,12 @@ export function useFinances(giteId = null) {
     return Object.values(map).map(g => ({ ...g, solde: g.du - g.recu }))
   }
 
-  // Regrouper par propriétaire
+  // Regrouper par propriétaire (champ texte)
   const soldeByProprietaire = () => {
     const soldes = soldeByGite()
     const map = {}
     soldes.forEach(g => {
-      const key = g.proprietaire || 'Sans propriétaire'
+      const key = (g.proprietaire || '').trim() || 'Sans propriétaire'
       if (!map[key]) map[key] = { proprietaire: key, gites: [], totalDu: 0, totalRecu: 0 }
       map[key].gites.push(g)
       map[key].totalDu   += g.du
@@ -74,8 +79,8 @@ export function useFinances(giteId = null) {
     return Object.values(map).map(p => ({ ...p, solde: p.totalDu - p.totalRecu }))
   }
 
-  const totalDu    = montantsDus.reduce((s, m) => s + Number(m.montant), 0)
-  const totalRecu  = versements.reduce((s, v) => s + Number(v.montant), 0)
+  const totalDu     = montantsDus.reduce((s, m) => s + Number(m.montant), 0)
+  const totalRecu   = versements.reduce((s, v) => s + Number(v.montant), 0)
   const soldeGlobal = totalDu - totalRecu
 
   return {
