@@ -265,7 +265,7 @@ export default function App() {
         </div>
 
         {/* Sélecteur gîtes - caché sur dashboard */}
-        {gites.length > 0 && tab !== 'dashboard' && (
+        {gites.length > 0 && (
           <div className="gite-tabs">
             {gites.map(g => (
               <button key={g.id}
@@ -300,12 +300,11 @@ export default function App() {
       {gites.length > 0 && tab !== 'dashboard' && (
         <nav className="nav">
           {[
-           { id: 'planning',  label: 'Planning',  Icon: Calendar },
-            { id: 'menage',    label: 'Ménage',    Icon: ClipboardList },
-            { id: 'notes',     label: 'Notes',     Icon: StickyNote },
-            ...(activeGite?.mode_suivi && activeGite.mode_suivi !== 'amiable' ? [{ id: 'finances', label: 'Finances', Icon: Euro }] : []),
-            { id: 'stocks',    label: 'Stocks',    Icon: Package },
-            { id: 'heures',    label: 'Heures',    Icon: Clock },
+            { id: 'planning', label: 'Planning', Icon: Calendar },
+            { id: 'menage',   label: 'Ménage',   Icon: ClipboardList },
+            { id: 'stocks',   label: 'Stocks',   Icon: Package },
+            { id: 'notes',    label: 'Notes',    Icon: StickyNote },
+          { id: 'heures',   label: 'Heures',   Icon: Clock },
           ].map(({ id, label, Icon }) => (
             <button key={id} className={`nav-btn ${tab===id?'active':''}`} onClick={() => setTab(id)}>
               <Icon size={17} />
