@@ -208,35 +208,42 @@ function CompteRendu({ gites }) {
   const { versements } = useVersements()
   const { soldeByProprietaire } = useFinances()
 
-  // Heures par propriétaire
+  // Map giteId -> proprietaire
+  const giteProprietaire = {}
+  gites.forEach(g => { giteProprietaire[g.id] = (g.proprietaire || '').trim() || 'Sans propriétaire' })
+
+  // Heures par propriétaire (mode amiable uniquement)
   const heuresMap = {}
   sessions.forEach(s => {
     const gite = gites.find(g => g.id === s.gite_id)
-    const prop = gite?.proprietaire || 'Sans propriétaire'
-    if (!heuresMap[prop]) heuresMap[prop] = { proprietaire: prop, minutes: 0, gites: new Set() }
+    if (!gite || gite.mode_suivi !== 'amiable') return
+    const prop = giteProprietaire[s.gite_id] || 'Sans propriétaire'
+    if (!heuresMap[prop]) heuresMap[prop] = { proprietaire: prop, minutes: 0, giteNoms: new Set() }
     heuresMap[prop].minutes += s.duree_minutes
-    heuresMap[prop].gites.add(gite?.nom || s.gite_id)
+    heuresMap[prop].giteNoms.add(gite.nom)
   })
 
-  // Versements par propriétaire
+  // Versements par propriétaire (mode amiable uniquement - info seulement)
   const versMap = {}
   versements.forEach(v => {
     const gite = gites.find(g => g.id === v.gite_id)
-    const prop = gite?.proprietaire || 'Sans propriétaire'
+    if (!gite || gite.mode_suivi !== 'amiable') return
+    const prop = giteProprietaire[v.gite_id] || 'Sans propriétaire'
     if (!versMap[prop]) versMap[prop] = 0
     versMap[prop] += Number(v.montant)
   })
 
-  // Soldes financiers (mode taux fixe)
-  const soldes = soldeByProprietaire()
+  // Soldes financiers (mode taux fixe/forfait uniquement)
+  const soldes = soldeByProprietaire().filter(s => {
+    return s.gites?.some(g => g.mode !== 'amiable')
+  })
 
   const allProps = [...new Set([
     ...Object.keys(heuresMap),
-    ...Object.keys(versMap),
     ...soldes.map(s => s.proprietaire),
   ])]
 
-  if (allProps.length === 0) return (
+  if (allProps.length === 0 && gites.every(g => !g.proprietaire)) return (
     <div className="card">
       <div className="card-title" style={{marginBottom:'0.5rem'}}>Compte rendu par propriétaire</div>
       <p className="empty-text">Assignez des propriétaires aux gîtes dans les paramètres ⚙️</p>
@@ -246,31 +253,48 @@ function CompteRendu({ gites }) {
   return (
     <div className="card">
       <div className="card-title" style={{marginBottom:'0.85rem'}}>Compte rendu par propriétaire</div>
+      {allProps.length === 0 && <p className="empty-text">Aucune donnée à afficher.</p>}
       {allProps.map(prop => {
         const h = heuresMap[prop]
         const v = versMap[prop] || 0
         const s = soldes.find(x => x.proprietaire === prop)
         return (
           <div key={prop} style={{padding:'10px 0',borderBottom:'0.5px solid var(--border-2)'}}>
-            <div style={{fontWeight:500,fontSize:14,marginBottom:4}}>{prop}</div>
-            {h && (
-              <div style={{fontSize:13,color:'var(--text-2)',marginBottom:2}}>
-                <Clock size={12} style={{display:'inline',marginRight:4}}/>
-                {formatMinutes(h.minutes)} non réglées
-                {h.gites.size > 0 && ` (${[...h.gites].join(', ')})`}
+            <div style={{fontWeight:500,fontSize:14,marginBottom:6}}>{prop}</div>
+            {h && h.minutes > 0 && (
+              <div style={{fontSize:13,color:'var(--text-2)',marginBottom:3,display:'flex',alignItems:'center',gap:5}}>
+                <Clock size={12} color="var(--text-3)"/>
+                <span>{formatMinutes(h.minutes)} non réglées</span>
+                {h.giteNoms.size > 0 && <span style={{fontSize:11,color:'var(--text-3)'}}>({[...h.giteNoms].join(', ')})</span>}
               </div>
             )}
             {v > 0 && (
-              <div style={{fontSize:13,color:'var(--sage)',marginBottom:2}}>
-                <Euro size={12} style={{display:'inline',marginRight:4}}/>
-                {fmt(v)} reçus
+              <div style={{fontSize:13,color:'var(--sage)',marginBottom:3,display:'flex',alignItems:'center',gap:5}}>
+                <Euro size={12}/>
+                <span>{fmt(v)} reçus (à l'amiable)</span>
               </div>
             )}
-            {s && s.solde !== 0 && (
-              <div style={{fontSize:13,color:s.solde>0?'var(--warm)':'var(--sage)'}}>
-                <Euro size={12} style={{display:'inline',marginRight:4}}/>
-                {s.solde>0 ? `Doit encore ${fmt(s.solde)}` : `Avance de ${fmt(Math.abs(s.solde))}`}
-              </div>
+            {s && (
+              <>
+                {s.totalDu > 0 && (
+                  <div style={{fontSize:13,color:'var(--warm)',marginBottom:3,display:'flex',alignItems:'center',gap:5}}>
+                    <Euro size={12}/>
+                    <span>{fmt(s.totalDu)} dus (taux fixe)</span>
+                  </div>
+                )}
+                {s.solde > 0 && (
+                  <div style={{fontSize:13,color:'var(--warm)',display:'flex',alignItems:'center',gap:5}}>
+                    <Euro size={12}/>
+                    <span>Reste à payer : {fmt(s.solde)}</span>
+                  </div>
+                )}
+                {s.solde < 0 && (
+                  <div style={{fontSize:13,color:'var(--sage)',display:'flex',alignItems:'center',gap:5}}>
+                    <Euro size={12}/>
+                    <span>Avance de {fmt(Math.abs(s.solde))}</span>
+                  </div>
+                )}
+              </>
             )}
           </div>
         )
