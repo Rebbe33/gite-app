@@ -44,82 +44,104 @@ export function useFinances(giteId = null) {
 
   // Ajoute un versement et archive automatiquement les sessions couvertes
   const addVersement = async ({ gite_id, montant, date_versement, note }) => {
-    // Insérer le versement
-    await supabase.from('gite_versements').insert({ gite_id, montant, date_versement, note })
-
     // Récupérer infos du gîte
     const { data: gite } = await supabase.from('gite_gites')
       .select('mode_suivi, taux_horaire, forfait_montant')
       .eq('id', gite_id).single()
 
-    if (!gite || gite.mode_suivi === 'amiable') { await fetch(); return }
+    if (!gite || gite.mode_suivi === 'amiable') {
+      // Mode amiable : juste stocker le versement tel quel
+      await supabase.from('gite_versements').insert({ gite_id, montant, date_versement, note })
+      await fetch()
+      return
+    }
 
-    // Récupérer les sessions non archivées, triées par date (plus anciennes d'abord)
+    // Récupérer les versements non consommés (reliquats précédents)
+    const { data: versementsExistants } = await supabase
+      .from('gite_versements')
+      .select('*')
+      .eq('gite_id', gite_id)
+      .order('date_versement', { ascending: true })
+
+    // Récupérer les sessions non archivées, triées par date
     const { data: sessions } = await supabase
       .from('gite_heures_sessions')
       .select('*')
       .eq('gite_id', gite_id)
       .order('date_session', { ascending: true })
 
-    if (!sessions || sessions.length === 0) { await fetch(); return }
-
-    // Calculer le montant de chaque session directement depuis le taux/forfait
     const getMontantSession = (s) => {
-      if (gite.mode_suivi === 'taux_horaire' && gite.taux_horaire > 0) {
+      if (gite.mode_suivi === 'taux_horaire' && gite.taux_horaire > 0)
         return Math.round((s.duree_minutes / 60) * gite.taux_horaire * 100) / 100
-      }
-      if (gite.mode_suivi === 'forfait' && gite.forfait_montant > 0) {
+      if (gite.mode_suivi === 'forfait' && gite.forfait_montant > 0)
         return Number(gite.forfait_montant)
-      }
       return 0
     }
 
-    // Consommer le versement sur les sessions (plus anciennes d'abord)
-    let restant = Number(montant)
+    // Total disponible = reliquats précédents + nouveau versement
+    const totalReliquats = (versementsExistants || []).reduce((s, v) => s + Number(v.montant), 0)
+    let budget = Math.round((totalReliquats + Number(montant)) * 100) / 100
+
     const sessionsAArchiver = []
 
-    for (const session of sessions) {
+    for (const session of (sessions || [])) {
       const montantSession = getMontantSession(session)
       if (montantSession <= 0) continue
-      if (restant >= montantSession - 0.01) { // tolérance arrondi
+      if (budget >= montantSession - 0.01) {
         sessionsAArchiver.push({ ...session, montantSession })
-        restant = Math.round((restant - montantSession) * 100) / 100
+        budget = Math.round((budget - montantSession) * 100) / 100
       }
-      if (restant < 0.01) break
+      if (budget < 0.01) break
     }
 
-    if (sessionsAArchiver.length === 0) { await fetch(); return }
+    // Archiver les sessions couvertes
+    if (sessionsAArchiver.length > 0) {
+      const dates    = sessionsAArchiver.map(s => s.date_session).sort()
+      const totalMin = sessionsAArchiver.reduce((s, x) => s + x.duree_minutes, 0)
 
-    // Créer l'entrée d'archivage
-    const dates   = sessionsAArchiver.map(s => s.date_session).sort()
-    const totalMin = sessionsAArchiver.reduce((s, x) => s + x.duree_minutes, 0)
+      await supabase.from('gite_paiements').insert({
+        gite_id,
+        total_minutes: totalMin,
+        periode_debut: dates[0],
+        periode_fin:   dates[dates.length - 1],
+        date_paiement: date_versement,
+        note: `Archivage auto — ${sessionsAArchiver.length} session(s)${note ? ' · ' + note : ''}`,
+      })
 
-    await supabase.from('gite_paiements').insert({
-      gite_id,
-      total_minutes: totalMin,
-      periode_debut: dates[0],
-      periode_fin:   dates[dates.length - 1],
-      date_paiement: date_versement,
-      note: `Archivage auto — ${sessionsAArchiver.length} session(s) — versement ${montant}€${note ? ' · ' + note : ''}`,
-    })
+      await supabase.from('gite_heures_sessions')
+        .delete().in('id', sessionsAArchiver.map(s => s.id))
 
-    // Supprimer les sessions archivées
-    await supabase.from('gite_heures_sessions')
-      .delete().in('id', sessionsAArchiver.map(s => s.id))
-
-    // Supprimer les montants dus correspondants (par montant + gite, pas par date)
-    for (const session of sessionsAArchiver) {
-      const montantSession = session.montantSession
-      // Cherche un montant dû avec le même montant pour ce gîte
-      const { data: mdus } = await supabase.from('gite_montants_dus')
-        .select('id')
-        .eq('gite_id', gite_id)
-        .gte('montant', montantSession - 0.01)
-        .lte('montant', montantSession + 0.01)
-        .limit(1)
-      if (mdus && mdus.length > 0) {
-        await supabase.from('gite_montants_dus').delete().eq('id', mdus[0].id)
+      // Supprimer les montants dus correspondants
+      for (const session of sessionsAArchiver) {
+        const { data: mdus } = await supabase.from('gite_montants_dus')
+          .select('id').eq('gite_id', gite_id)
+          .gte('montant', session.montantSession - 0.01)
+          .lte('montant', session.montantSession + 0.01)
+          .limit(1)
+        if (mdus && mdus.length > 0)
+          await supabase.from('gite_montants_dus').delete().eq('id', mdus[0].id)
       }
+    }
+
+    // Supprimer TOUS les anciens versements et stocker uniquement le reliquat
+    if (versementsExistants && versementsExistants.length > 0) {
+      await supabase.from('gite_versements')
+        .delete().in('id', versementsExistants.map(v => v.id))
+    }
+
+    // Stocker le reliquat restant (ou 0 si tout est consommé)
+    const reliquat = Math.round(budget * 100) / 100
+    if (reliquat > 0.01) {
+      await supabase.from('gite_versements').insert({
+        gite_id,
+        montant: reliquat,
+        date_versement,
+        note: `Reliquat${note ? ' · ' + note : ''}`,
+      })
+    } else {
+      // Rien à stocker — tout a été consommé, on insère quand même pour la trace
+      // mais avec montant = 0 seulement si on veut garder la trace, sinon on skippe
+      // Ici on ne stocke rien si reliquat = 0
     }
 
     await fetch()
