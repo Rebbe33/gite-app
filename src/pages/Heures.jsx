@@ -247,6 +247,7 @@ export default function Heures({ giteId }) {
             </div>
           )}
 
+          {isAmiable && (
           <div className="card">
             <div className="card-header" style={{cursor:'pointer'}} onClick={()=>setShowVersements(v=>!v)}>
               <span className="card-title">Versements reçus ({versements.length})</span>
@@ -272,14 +273,20 @@ export default function Heures({ giteId }) {
             )}
           </div>
 
-          <div style={{display:'flex',gap:8}}>
-            <button className="btn-add-item" style={{flex:1}} onClick={()=>setShowAdd(true)}>
+          {isAmiable ? (
+            <div style={{display:'flex',gap:8}}>
+              <button className="btn-add-item" style={{flex:1}} onClick={()=>setShowAdd(true)}>
+                <Plus size={14}/> Ajouter des heures
+              </button>
+              <button className="btn-add-item" style={{flex:1,color:'var(--sage)'}} onClick={()=>setShowAddVersement(true)}>
+                <Plus size={14}/> Versement reçu
+              </button>
+            </div>
+          ) : (
+            <button className="btn-add-item" onClick={()=>setShowAdd(true)}>
               <Plus size={14}/> Ajouter des heures
             </button>
-            <button className="btn-add-item" style={{flex:1,color:'var(--sage)'}} onClick={()=>setShowAddVersement(true)}>
-              <Plus size={14}/> Versement reçu
-            </button>
-          </div>
+          )}
         </>
       )}
 
