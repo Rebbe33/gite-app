@@ -18,29 +18,57 @@ Deno.serve(async () => {
 
     const today = new Date()
     const todayStr   = today.toISOString().split('T')[0]
-    const in2days    = new Date(today)
+
+    const in2days = new Date(today)
     in2days.setDate(in2days.getDate() + 2)
     const in2daysStr = in2days.toISOString().split('T')[0]
 
-    const [{ data: departures }, { data: arrivals }, { data: subs, error: subError }] = await Promise.all([
-      supabase.from('gite_reservations').select('*, gite_gites(nom)').eq('date_depart', todayStr).eq('statut', 'confirme'),
-      supabase.from('gite_reservations').select('*, gite_gites(nom)').eq('date_arrivee', in2daysStr).eq('statut', 'confirme'),
-      supabase.from('gite_push_subscriptions').select('*'),
-    ])
+    // Réservations avec arrivée dans 2 jours
+    const { data: arrivals } = await supabase
+      .from('gite_reservations')
+      .select('*, gite_gites(nom)')
+      .eq('date_arrivee', in2daysStr)
+      .eq('statut', 'confirme')
+
+    // Réservations avec départ aujourd'hui
+    const { data: departures } = await supabase
+      .from('gite_reservations')
+      .select('*, gite_gites(nom)')
+      .eq('date_depart', todayStr)
+      .eq('statut', 'confirme')
+
+    // Réservations avec départ dans 2 jours
+    const { data: departuresIn2 } = await supabase
+      .from('gite_reservations')
+      .select('*, gite_gites(nom)')
+      .eq('date_depart', in2daysStr)
+      .eq('statut', 'confirme')
+
+    const { data: subs, error: subError } = await supabase
+      .from('gite_push_subscriptions')
+      .select('*')
 
     if (subError) return new Response(JSON.stringify({ error: subError.message }), { status: 500 })
     if (!subs || subs.length === 0) return new Response('No subscribers', { status: 200 })
 
     const notifications = [
+      // Départ aujourd'hui → ménage à faire
       ...(departures || []).map(r => ({
         title: `🧹 Ménage à faire — ${r.gite_gites?.nom}`,
         body: `Départ de ${r.nom_locataire} aujourd'hui. Pensez au ménage !`,
         tag: `depart-${r.id}`,
       })),
+      // Arrivée dans 2 jours → vérifier que tout est prêt
       ...(arrivals || []).map(r => ({
         title: `📋 Arrivée dans 2 jours — ${r.gite_gites?.nom}`,
-        body: `${r.nom_locataire} arrive le ${new Date(r.date_arrivee).toLocaleDateString('fr-FR')}. Vérifiez que tout est prêt.`,
+        body: `${r.nom_locataire} arrive le ${new Date(r.date_arrivee).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}. Vérifiez que tout est prêt.`,
         tag: `arrivee-${r.id}`,
+      })),
+      // Départ dans 2 jours → rappel
+      ...(departuresIn2 || []).map(r => ({
+        title: `⏰ Départ dans 2 jours — ${r.gite_gites?.nom}`,
+        body: `${r.nom_locataire} part le ${new Date(r.date_depart).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}. Préparez le ménage.`,
+        tag: `depart-j2-${r.id}`,
       })),
     ]
 
