@@ -2,11 +2,11 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 
 export function useTasks(giteId) {
-  const [tasks, setTasks]         = useState([])
-  const [logs, setLogs]           = useState([])
-  const [passage, setPassage]     = useState(null)
+  const [tasks, setTasks]               = useState([])
+  const [logs, setLogs]                 = useState([])
+  const [passage, setPassage]           = useState(null)
   const [passageCount, setPassageCount] = useState(0)
-  const [loading, setLoading]     = useState(true)
+  const [loading, setLoading]           = useState(true)
 
   const fetchAll = useCallback(async () => {
     if (!giteId) { setLoading(false); return }
@@ -27,7 +27,7 @@ export function useTasks(giteId) {
 
     if (open) {
       const { data: logData } = await supabase
-        .from('task_logs')
+        .from('gite_task_logs')   // ← corrigé
         .select('*')
         .eq('gite_id', giteId)
         .eq('passage_numero', open.numero)
