@@ -39,3 +39,37 @@ export function useReservations(giteId) {
 
   return { reservations, loading, add, update, remove, refresh: fetch }
 }
+
+export function useAllReservations(gites) {
+  const [all, setAll] = useState([])
+
+  const giteIds = gites?.map(g => g.id).join(',') ?? ''
+
+  const fetch = useCallback(async () => {
+    if (!gites?.length) return
+    const ids = gites.map(g => g.id)
+    const { data } = await supabase
+      .from('gite_reservations')
+      .select('*')
+      .in('gite_id', ids)
+      .order('date_arrivee')
+    setAll(data || [])
+  }, [giteIds])
+
+  useEffect(() => {
+    fetch()
+    if (!gites?.length) return
+
+    const sub = supabase.channel('resa-all')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'gite_reservations'
+      }, fetch)
+      .subscribe()
+
+    return () => supabase.removeChannel(sub)
+  }, [fetch])
+
+  return all
+}
