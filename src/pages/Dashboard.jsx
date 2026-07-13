@@ -12,21 +12,7 @@ const GITE_COLORS = ['#4a7c59','#185fa5','#c9853a','#7c4a7c','#b33030']
 const MONTHS_FR   = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc']
 const DAYS_FR     = ['L','M','M','J','V','S','D']
 
-function fmt(n) { return Number(n).toFixed(2).replace('.', ',') + ' €' }
-
-// Reservations pour tous les gites (max 4)
-function useAllReservations(gites) {
-  const { reservations: r0 } = useReservations(gites[0]?.id)
-  const { reservations: r1 } = useReservations(gites[1]?.id)
-  const { reservations: r2 } = useReservations(gites[2]?.id)
-  const { reservations: r3 } = useReservations(gites[3]?.id)
-  return [
-    ...(r0||[]).map(r => ({...r, colorIdx:0, giteNom: gites[0]?.nom})),
-    ...(r1||[]).map(r => ({...r, colorIdx:1, giteNom: gites[1]?.nom})),
-    ...(r2||[]).map(r => ({...r, colorIdx:2, giteNom: gites[2]?.nom})),
-    ...(r3||[]).map(r => ({...r, colorIdx:3, giteNom: gites[3]?.nom})),
-  ].filter(r => r.statut !== 'annule')
-}
+function fmt(n) { return Number(n).toFixed(2).replace('.', ',') + ' €' 
 
 function useAllStocks(gites) {
   const { stocks: s0 } = useStocks(gites[0]?.id)
