@@ -43,7 +43,8 @@ export function useReservations(giteId) {
 export function useAllReservations(gites) {
   const [all, setAll] = useState([])
 
-  const giteIds = gites?.map(g => g.id).join(',') ?? ''
+  // ?.join() corrigé pour éviter le crash quand gites est undefined/vide
+  const giteIds = gites?.map(g => g.id)?.join(',') ?? ''
 
   const fetch = useCallback(async () => {
     if (!gites?.length) return
