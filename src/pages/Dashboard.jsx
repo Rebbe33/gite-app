@@ -1,18 +1,18 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useGites } from '../hooks/useGites'
-import { useReservations } from '../hooks/useReservations'
+import { useAllReservations } from '../hooks/useReservations'
 import { useStocks } from '../hooks/useStocks'
 import { useFinances } from '../hooks/useFinances'
 import { useHeures, formatMinutes } from '../hooks/useHeures'
 import { useVersements } from '../hooks/useVersements'
-import { AlertTriangle, Clock, Euro, Plus, X, Check, Users, Calendar } from 'lucide-react'
-import { useAllReservations } from '../hooks/useReservations'
+import { AlertTriangle, Clock, Euro, Plus, X, Check, Users } from 'lucide-react'
 
 const GITE_COLORS = ['#4a7c59','#185fa5','#c9853a','#7c4a7c','#b33030']
 const MONTHS_FR   = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc']
 const DAYS_FR     = ['L','M','M','J','V','S','D']
 
-function fmt(n) { return Number(n).toFixed(2).replace('.', ',') + ' €' 
+// ← accolade fermante manquante corrigée
+function fmt(n) { return Number(n).toFixed(2).replace('.', ',') + ' €' }
 
 function useAllStocks(gites) {
   const { stocks: s0 } = useStocks(gites[0]?.id)
@@ -84,7 +84,6 @@ function CalendarSection({ gites, allResas, onAddResa }) {
   const [year, setYear]   = useState(today.getFullYear())
   const [month, setMonth] = useState(today.getMonth())
 
-  // Map jour → { colorIdx, clientIdx } pour différencier les clients
   const dayMap = {}
   allResas.forEach(r => {
     const start = new Date(r.date_arrivee)
@@ -93,13 +92,9 @@ function CalendarSection({ gites, allResas, onAddResa }) {
       if (d.getFullYear()===year && d.getMonth()===month) {
         const key = d.getDate()
         if (!dayMap[key]) dayMap[key] = []
-        // Stocker colorIdx + id de résa pour détecter les changements de client
         const existing = dayMap[key].find(x=>x.colorIdx===r.colorIdx)
         if (!existing) dayMap[key].push({ colorIdx: r.colorIdx, resaId: r.id, isStart: d.getTime()===start.getTime(), isEnd: d.getTime()===end.getTime() })
-        else if (existing.resaId !== r.id) {
-          // Deux clients différents sur le même gîte — jour de transition
-          existing.isTransition = true
-        }
+        else if (existing.resaId !== r.id) { existing.isTransition = true }
       }
     }
   })
@@ -107,6 +102,11 @@ function CalendarSection({ gites, allResas, onAddResa }) {
   const daysInMonth    = new Date(year, month+1, 0).getDate()
   const firstDayOfWeek = (new Date(year, month, 1).getDay()+6)%7
   const todayDay = today.getFullYear()===year && today.getMonth()===month ? today.getDate() : -1
+
+  const monthResas = allResas.filter(r => {
+    const s = new Date(r.date_arrivee), e = new Date(r.date_depart)
+    return (s.getFullYear()===year && s.getMonth()===month) || (e.getFullYear()===year && e.getMonth()===month)
+  }).sort((a,b) => new Date(a.date_arrivee)-new Date(b.date_arrivee))
 
   return (
     <div className="card">
@@ -119,7 +119,6 @@ function CalendarSection({ gites, allResas, onAddResa }) {
         </div>
       </div>
 
-      {/* Légende */}
       <div style={{display:'flex',flexWrap:'wrap',gap:8,marginBottom:10}}>
         {gites.map((g,i) => (
           <div key={g.id} style={{display:'flex',alignItems:'center',gap:4,fontSize:12,color:'var(--text-2)'}}>
@@ -145,7 +144,7 @@ function CalendarSection({ gites, allResas, onAddResa }) {
                   {entries.map((e,idx) => (
                     <span key={idx} style={{
                       width: e.isTransition ? 3 : 5,
-                      height: e.isTransition ? 5 : 5,
+                      height: 5,
                       borderRadius: e.isTransition ? '1px' : '50%',
                       background: GITE_COLORS[e.colorIdx],
                       border: e.isTransition ? `1px solid ${GITE_COLORS[e.colorIdx]}` : 'none',
@@ -159,32 +158,20 @@ function CalendarSection({ gites, allResas, onAddResa }) {
         })}
       </div>
 
-      {/* Réservations du mois */}
       <div style={{marginTop:10,borderTop:'0.5px solid var(--border-2)',paddingTop:10}}>
-        {allResas
-          .filter(r => {
-            const s = new Date(r.date_arrivee), e = new Date(r.date_depart)
-            return (s.getFullYear()===year && s.getMonth()===month) ||
-                   (e.getFullYear()===year && e.getMonth()===month)
-          })
-          .sort((a,b) => new Date(a.date_arrivee)-new Date(b.date_arrivee))
-          .map(r => (
-            <div key={r.id} style={{display:'flex',alignItems:'center',gap:8,padding:'6px 0',borderBottom:'0.5px solid var(--border-2)'}}>
-              <span style={{width:8,height:8,borderRadius:'50%',background:GITE_COLORS[r.colorIdx],flexShrink:0}}/>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:13,fontWeight:500}}>{r.nom_locataire}</div>
-                <div style={{fontSize:11,color:'var(--text-2)'}}>
-                  {r.giteNom} · {new Date(r.date_arrivee).toLocaleDateString('fr-FR',{day:'numeric',month:'short'})} → {new Date(r.date_depart).toLocaleDateString('fr-FR',{day:'numeric',month:'short'})}
-                  {' · '}<Users size={10} style={{display:'inline'}}/> {r.nb_personnes}
-                </div>
+        {monthResas.length === 0 && <p className="empty-text">Aucune réservation ce mois.</p>}
+        {monthResas.map(r => (
+          <div key={r.id} style={{display:'flex',alignItems:'center',gap:8,padding:'6px 0',borderBottom:'0.5px solid var(--border-2)'}}>
+            <span style={{width:8,height:8,borderRadius:'50%',background:GITE_COLORS[r.colorIdx],flexShrink:0}}/>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:13,fontWeight:500}}>{r.nom_locataire}</div>
+              <div style={{fontSize:11,color:'var(--text-2)'}}>
+                {r.giteNom} · {new Date(r.date_arrivee).toLocaleDateString('fr-FR',{day:'numeric',month:'short'})} → {new Date(r.date_depart).toLocaleDateString('fr-FR',{day:'numeric',month:'short'})}
+                {' · '}<Users size={10} style={{display:'inline'}}/> {r.nb_personnes}
               </div>
             </div>
-          ))
-        }
-        {allResas.filter(r => {
-          const s = new Date(r.date_arrivee), e = new Date(r.date_depart)
-          return (s.getFullYear()===year && s.getMonth()===month) || (e.getFullYear()===year && e.getMonth()===month)
-        }).length === 0 && <p className="empty-text">Aucune réservation ce mois.</p>}
+          </div>
+        ))}
       </div>
     </div>
   )
@@ -195,11 +182,9 @@ function CompteRendu({ gites }) {
   const { versements } = useVersements()
   const { soldeByProprietaire } = useFinances()
 
-  // Map giteId -> proprietaire
   const giteProprietaire = {}
   gites.forEach(g => { giteProprietaire[g.id] = (g.proprietaire || '').trim() || 'Sans propriétaire' })
 
-  // Heures par propriétaire (mode amiable uniquement)
   const heuresMap = {}
   sessions.forEach(s => {
     const gite = gites.find(g => g.id === s.gite_id)
@@ -210,7 +195,6 @@ function CompteRendu({ gites }) {
     heuresMap[prop].giteNoms.add(gite.nom)
   })
 
-  // Versements par propriétaire (mode amiable uniquement - info seulement)
   const versMap = {}
   versements.forEach(v => {
     const gite = gites.find(g => g.id === v.gite_id)
@@ -220,15 +204,9 @@ function CompteRendu({ gites }) {
     versMap[prop] += Number(v.montant)
   })
 
-  // Soldes financiers (mode taux fixe/forfait uniquement)
-  const soldes = soldeByProprietaire().filter(s => {
-    return s.gites?.some(g => g.mode !== 'amiable')
-  })
+  const soldes = soldeByProprietaire().filter(s => s.gites?.some(g => g.mode !== 'amiable'))
 
-  const allProps = [...new Set([
-    ...Object.keys(heuresMap),
-    ...soldes.map(s => s.proprietaire),
-  ])]
+  const allProps = [...new Set([...Object.keys(heuresMap), ...soldes.map(s => s.proprietaire)])]
 
   if (allProps.length === 0 && gites.every(g => !g.proprietaire)) return (
     <div className="card">
@@ -292,11 +270,25 @@ function CompteRendu({ gites }) {
 
 export default function Dashboard() {
   const { gites } = useGites()
-  const allResas  = useAllReservations(gites)
+  const rawResas  = useAllReservations(gites)
   const allLow    = useAllStocks(gites)
   const [showAddResa, setShowAddResa] = useState(false)
 
-  // Pour ajouter une résa depuis le dashboard, on utilise useReservations par gîte
+  // Enrichir les réservations avec colorIdx et giteNom
+  const allResas = useMemo(() =>
+    rawResas
+      .filter(r => r.statut !== 'annule')
+      .map(r => {
+        const idx = gites.findIndex(g => g.id === r.gite_id)
+        return {
+          ...r,
+          colorIdx: idx >= 0 ? idx : 0,
+          giteNom: gites[idx]?.nom ?? '',
+        }
+      }),
+    [rawResas, gites]
+  )
+
   const handleAddResa = async (form) => {
     const { supabase } = await import('../lib/supabase.js')
     await supabase.from('gite_reservations').insert({
@@ -313,10 +305,8 @@ export default function Dashboard() {
 
   return (
     <div>
-      {/* Calendrier multi-gîtes */}
       <CalendarSection gites={gites} allResas={allResas} onAddResa={() => setShowAddResa(true)}/>
 
-      {/* Stocks bas */}
       <div className="card">
         <div className="card-header">
           <span className="card-title">Stocks bas</span>
@@ -337,7 +327,6 @@ export default function Dashboard() {
         ))}
       </div>
 
-      {/* Compte rendu par propriétaire */}
       <CompteRendu gites={gites}/>
 
       {showAddResa && (
