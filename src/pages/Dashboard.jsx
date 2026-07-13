@@ -6,6 +6,7 @@ import { useFinances } from '../hooks/useFinances'
 import { useHeures, formatMinutes } from '../hooks/useHeures'
 import { useVersements } from '../hooks/useVersements'
 import { AlertTriangle, Clock, Euro, Plus, X, Check, Users, Calendar } from 'lucide-react'
+import { useAllReservations } from '../hooks/useReservations'
 
 const GITE_COLORS = ['#4a7c59','#185fa5','#c9853a','#7c4a7c','#b33030']
 const MONTHS_FR   = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc']
