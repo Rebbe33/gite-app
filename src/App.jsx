@@ -178,7 +178,7 @@ function GiteApp({ gite, tab }) {
       {tab==='menage'   && <ErrorBoundary name="Menage"  ><Menage    giteId={gite.id}/></ErrorBoundary>}
       {tab==='stocks'   && <ErrorBoundary name="Stocks"  ><Stocks    giteId={gite.id}/></ErrorBoundary>}
       {tab==='notes'    && <ErrorBoundary name="Notes"   ><Notes     giteId={gite.id} giteName={gite.nom}/></ErrorBoundary>}
-      {tab==='heures'   && <ErrorBoundary name="Heures"  ><Heures    giteId={gite.id}/></ErrorBoundary>}
+      {tab==='heures' && <ErrorBoundary name="Heures"><Heures giteId={gite.id} gite={gite}/></ErrorBoundary>}
       {tab==='finances' && <ErrorBoundary name="Finances"><Finances  giteId={gite.id}/></ErrorBoundary>}
     </main>
   )
