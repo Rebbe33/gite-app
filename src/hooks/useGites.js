@@ -6,6 +6,10 @@ export function useGites() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
+  // Nom unique par instance → jamais de conflit même si useGites est appelé plusieurs fois
+  const channelName = useRef(`gites-${Math.random().toString(36).slice(2)}`)
+  const fetchRef = useRef(null)
+
   const fetchGites = useCallback(async () => {
     const { data, error } = await supabase.from('gite_gites').select('*').order('created_at')
     if (error) setError(error.message)
@@ -13,19 +17,19 @@ export function useGites() {
     setLoading(false)
   }, [])
 
-  // Ref pour toujours avoir la version fraîche de fetchGites sans recréer le channel
-  const fetchRef = useRef(fetchGites)
-  useEffect(() => { fetchRef.current = fetchGites }, [fetchGites])
+  useEffect(() => {
+    fetchRef.current = fetchGites
+  }, [fetchGites])
 
   useEffect(() => {
     fetchGites()
-    const sub = supabase.channel('gites-main')
+    const sub = supabase.channel(channelName.current)
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'gite_gites' },
-        () => fetchRef.current()   // ← appel via ref, pas fetchGites directement
+        () => fetchRef.current()
       ).subscribe()
     return () => supabase.removeChannel(sub)
-  }, []) // ← [] : s'exécute une seule fois, pas de recréation du channel
+  }, [])
 
   const addGite = async (nom) => {
     const { data, error } = await supabase.from('gite_gites')
