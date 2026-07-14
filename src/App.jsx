@@ -1,17 +1,39 @@
-import { useState } from 'react'
-import { Calendar, ClipboardList, Package, StickyNote, Clock, LayoutDashboard, Euro, Home, Plus, Settings, X, Check, Pencil, Trash2, Upload } from 'lucide-react'
+import { useState, Component } from 'react'
+import { Calendar, ClipboardList, Package, StickyNote, Clock, Plus, Settings, X, Check, Trash2, Upload, Home } from 'lucide-react'
 import { useGites } from './hooks/useGites'
 import { parseTasksExcel } from './lib/excel'
 
 import Planning   from './pages/Planning'
 import Dashboard  from './pages/Dashboard'
 import Finances   from './pages/Finances'
-import Heures   from './pages/Heures'
+import Heures     from './pages/Heures'
 import NotifSettings from './components/NotifSettings'
-import Menage   from './pages/Menage'
-import Stocks   from './pages/Stocks'
-import Notes    from './pages/Notes'
+import Menage     from './pages/Menage'
+import Stocks     from './pages/Stocks'
+import Notes      from './pages/Notes'
 import './index.css'
+
+// ─── Error Boundary ───────────────────────────────────────────────────────────
+class ErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { error: null } }
+  static getDerivedStateFromError(error) { return { error } }
+  render() {
+    if (this.state.error) return (
+      <div style={{ padding: 24, background: '#fff1f0', border: '1px solid #ffccc7', borderRadius: 8, margin: 16 }}>
+        <div style={{ fontWeight: 700, color: '#cf1322', marginBottom: 8 }}>💥 Erreur — {this.props.name}</div>
+        <div style={{ fontFamily: 'monospace', fontSize: 13, color: '#333', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+          {this.state.error?.message}
+          {'\n\n'}
+          {this.state.error?.stack}
+        </div>
+        <button style={{ marginTop: 12, padding: '6px 14px', background: '#cf1322', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}
+          onClick={() => this.setState({ error: null })}>Réessayer</button>
+      </div>
+    )
+    return this.props.children
+  }
+}
+// ──────────────────────────────────────────────────────────────────────────────
 
 function AddGiteModal({ onSave, onClose }) {
   const [name, setName]         = useState('')
@@ -46,8 +68,7 @@ function AddGiteModal({ onSave, onClose }) {
         taux_horaire: modeSuivi === 'taux_horaire' ? parseFloat(tauxHoraire)||0 : 0,
         forfait_montant: modeSuivi === 'forfait' ? parseFloat(forfaitMontant)||0 : 0,
       })
-    }
-    finally { setLoading(false) }
+    } finally { setLoading(false) }
   }
 
   return (
@@ -87,7 +108,7 @@ function AddGiteModal({ onSave, onClose }) {
             </div>
           )}
           <div className="form-field full">
-            <label>Fichier Excel de tâches <span style={{ color:'#9c9890' }}>(optionnel, importable plus tard)</span></label>
+            <label>Fichier Excel de tâches <span style={{ color:'#9c9890' }}>(optionnel)</span></label>
             <label className="file-drop">
               <Upload size={16} color="#9c9890" />
               <span>{file ? `${file.name} — ${tasks?.length ?? 0} tâches` : 'Choisir un fichier .xlsx'}</span>
@@ -182,16 +203,15 @@ function GiteSettings({ gite, onRename, onDelete, onUpdate, onClose }) {
   )
 }
 
-// Composant interne pour avoir accès à useTasks dans le contexte du gîte actif
 function GiteApp({ gite, tab, setTab }) {
   return (
     <main className="main">
-      {tab === 'planning'  && <Planning giteId={gite.id} />}
-      {tab === 'menage'    && <Menage   giteId={gite.id} />}
-      {tab === 'stocks'    && <Stocks   giteId={gite.id} />}
-      {tab === 'notes'     && <Notes     giteId={gite.id} giteName={gite.nom} />}
-      {tab === 'heures'    && <Heures    giteId={gite.id} />}
-      {tab === 'finances'  && <Finances  giteId={gite.id} />}
+      {tab === 'planning'  && <ErrorBoundary name="Planning"><Planning giteId={gite.id} /></ErrorBoundary>}
+      {tab === 'menage'    && <ErrorBoundary name="Menage"><Menage   giteId={gite.id} /></ErrorBoundary>}
+      {tab === 'stocks'    && <ErrorBoundary name="Stocks"><Stocks   giteId={gite.id} /></ErrorBoundary>}
+      {tab === 'notes'     && <ErrorBoundary name="Notes"><Notes     giteId={gite.id} giteName={gite.nom} /></ErrorBoundary>}
+      {tab === 'heures'    && <ErrorBoundary name="Heures"><Heures   giteId={gite.id} /></ErrorBoundary>}
+      {tab === 'finances'  && <ErrorBoundary name="Finances"><Finances giteId={gite.id} /></ErrorBoundary>}
     </main>
   )
 }
@@ -202,8 +222,6 @@ export default function App() {
   const [tab, setTab] = useState('menage')
   const [showAddGite, setShowAddGite] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
-
-  const { supabase: sb } = (() => { try { return { supabase: true } } catch { return { supabase: false } } })()
 
   const activeGite = gites.find(g => g.id === activeGiteId) || gites[0]
 
@@ -220,19 +238,15 @@ export default function App() {
       <div className="splash-logo">⚠️</div>
       <div className="splash-title">Erreur de connexion</div>
       <div className="splash-sub">{error}</div>
-      <div className="splash-sub" style={{ marginTop:8, fontSize:13 }}>Vérifiez votre fichier .env (VITE_SUPABASE_URL et VITE_SUPABASE_ANON_KEY)</div>
     </div>
   )
 
   const handleAddGite = async (name, tasks, options = {}) => {
     const gite = await addGite(name)
-    if (options && Object.keys(options).length > 0) {
-      await updateGite(gite.id, options)
-    }
+    if (options && Object.keys(options).length > 0) await updateGite(gite.id, options)
     if (tasks.length > 0) {
       const { supabase } = await import('./lib/supabase.js')
-      const toInsert = tasks.map(t => ({ ...t, gite_id: gite.id }))
-      await supabase.from('gite_tasks').insert(toInsert)
+      await supabase.from('gite_tasks').insert(tasks.map(t => ({ ...t, gite_id: gite.id })))
     }
     setActiveGiteId(gite.id)
     setShowAddGite(false)
@@ -240,14 +254,11 @@ export default function App() {
 
   return (
     <div className="app">
-      {/* HEADER */}
       <header className="header">
         <div className="header-top">
           <div className="logo">
             <span className="logo-icon">🏡</span>
-            <div>
-              <div className="logo-title">Gestion Gîtes</div>
-            </div>
+            <div><div className="logo-title">Gestion Gîtes</div></div>
           </div>
           <div className="header-actions">
             <button className={`icon-btn ${tab==='dashboard'?'icon-btn-active':''}`} onClick={() => setTab('dashboard')} title="Vue globale">
@@ -264,7 +275,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* Sélecteur gîtes - caché sur dashboard */}
         {gites.length > 0 && (
           <div className="gite-tabs">
             {gites.map(g => (
@@ -277,13 +287,11 @@ export default function App() {
           </div>
         )}
 
-        {/* Nom gîte actif - caché sur dashboard */}
         {activeGite && tab !== 'dashboard' && (
           <div className="active-gite-name">{activeGite.nom}</div>
         )}
       </header>
 
-      {/* Contenu */}
       {gites.length === 0 ? (
         <div className="empty-app">
           <div style={{ fontSize:'3rem' }}>🏡</div>
@@ -293,10 +301,11 @@ export default function App() {
           </button>
         </div>
       ) : (
-        tab === 'dashboard' ? <main className="main"><Dashboard /></main> : activeGite && <GiteApp gite={activeGite} tab={tab} setTab={setTab} />
+        tab === 'dashboard'
+          ? <main className="main"><ErrorBoundary name="Dashboard"><Dashboard /></ErrorBoundary></main>
+          : activeGite && <GiteApp gite={activeGite} tab={tab} setTab={setTab} />
       )}
 
-      {/* NAV */}
       {gites.length > 0 && tab !== 'dashboard' && (
         <nav className="nav">
           {[
@@ -304,19 +313,16 @@ export default function App() {
             { id: 'menage',   label: 'Ménage',   Icon: ClipboardList },
             { id: 'stocks',   label: 'Stocks',   Icon: Package },
             { id: 'notes',    label: 'Notes',    Icon: StickyNote },
-          { id: 'heures',   label: 'Heures',   Icon: Clock },
+            { id: 'heures',   label: 'Heures',   Icon: Clock },
           ].map(({ id, label, Icon }) => (
             <button key={id} className={`nav-btn ${tab===id?'active':''}`} onClick={() => setTab(id)}>
-              <Icon size={17} />
-              <span>{label}</span>
+              <Icon size={17} /><span>{label}</span>
             </button>
           ))}
         </nav>
       )}
 
-      {showAddGite && (
-        <AddGiteModal onSave={handleAddGite} onClose={() => setShowAddGite(false)} />
-      )}
+      {showAddGite && <AddGiteModal onSave={handleAddGite} onClose={() => setShowAddGite(false)} />}
 
       {showSettings && activeGite && (
         <GiteSettings
