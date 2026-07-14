@@ -1,5 +1,4 @@
 import { useState, useMemo } from 'react'
-import { useGites } from '../hooks/useGites'
 import { useAllReservations } from '../hooks/useReservations'
 import { useStocks } from '../hooks/useStocks'
 import { useFinances } from '../hooks/useFinances'
@@ -11,7 +10,6 @@ const GITE_COLORS = ['#4a7c59','#185fa5','#c9853a','#7c4a7c','#b33030']
 const MONTHS_FR   = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc']
 const DAYS_FR     = ['L','M','M','J','V','S','D']
 
-// ← accolade fermante manquante corrigée
 function fmt(n) { return Number(n).toFixed(2).replace('.', ',') + ' €' }
 
 function useAllStocks(gites) {
@@ -94,7 +92,7 @@ function CalendarSection({ gites, allResas, onAddResa }) {
         if (!dayMap[key]) dayMap[key] = []
         const existing = dayMap[key].find(x=>x.colorIdx===r.colorIdx)
         if (!existing) dayMap[key].push({ colorIdx: r.colorIdx, resaId: r.id, isStart: d.getTime()===start.getTime(), isEnd: d.getTime()===end.getTime() })
-        else if (existing.resaId !== r.id) { existing.isTransition = true }
+        else if (existing.resaId !== r.id) existing.isTransition = true
       }
     }
   })
@@ -103,10 +101,12 @@ function CalendarSection({ gites, allResas, onAddResa }) {
   const firstDayOfWeek = (new Date(year, month, 1).getDay()+6)%7
   const todayDay = today.getFullYear()===year && today.getMonth()===month ? today.getDate() : -1
 
-  const monthResas = allResas.filter(r => {
-    const s = new Date(r.date_arrivee), e = new Date(r.date_depart)
-    return (s.getFullYear()===year && s.getMonth()===month) || (e.getFullYear()===year && e.getMonth()===month)
-  }).sort((a,b) => new Date(a.date_arrivee)-new Date(b.date_arrivee))
+  const monthResas = allResas
+    .filter(r => {
+      const s = new Date(r.date_arrivee), e = new Date(r.date_depart)
+      return (s.getFullYear()===year && s.getMonth()===month) || (e.getFullYear()===year && e.getMonth()===month)
+    })
+    .sort((a,b) => new Date(a.date_arrivee)-new Date(b.date_arrivee))
 
   return (
     <div className="card">
@@ -147,7 +147,6 @@ function CalendarSection({ gites, allResas, onAddResa }) {
                       height: 5,
                       borderRadius: e.isTransition ? '1px' : '50%',
                       background: GITE_COLORS[e.colorIdx],
-                      border: e.isTransition ? `1px solid ${GITE_COLORS[e.colorIdx]}` : 'none',
                       opacity: e.isEnd || e.isStart ? 1 : 0.7,
                     }}/>
                   ))}
@@ -205,7 +204,6 @@ function CompteRendu({ gites }) {
   })
 
   const soldes = soldeByProprietaire().filter(s => s.gites?.some(g => g.mode !== 'amiable'))
-
   const allProps = [...new Set([...Object.keys(heuresMap), ...soldes.map(s => s.proprietaire)])]
 
   if (allProps.length === 0 && gites.every(g => !g.proprietaire)) return (
@@ -235,28 +233,24 @@ function CompteRendu({ gites }) {
             )}
             {v > 0 && (
               <div style={{fontSize:13,color:'var(--sage)',marginBottom:3,display:'flex',alignItems:'center',gap:5}}>
-                <Euro size={12}/>
-                <span>{fmt(v)} reçus (à l'amiable)</span>
+                <Euro size={12}/><span>{fmt(v)} reçus (à l'amiable)</span>
               </div>
             )}
             {s && (
               <>
                 {s.totalDu > 0 && (
                   <div style={{fontSize:13,color:'var(--warm)',marginBottom:3,display:'flex',alignItems:'center',gap:5}}>
-                    <Euro size={12}/>
-                    <span>{fmt(s.totalDu)} dus (taux fixe)</span>
+                    <Euro size={12}/><span>{fmt(s.totalDu)} dus (taux fixe)</span>
                   </div>
                 )}
                 {s.solde > 0 && (
                   <div style={{fontSize:13,color:'var(--warm)',display:'flex',alignItems:'center',gap:5}}>
-                    <Euro size={12}/>
-                    <span>Reste à payer : {fmt(s.solde)}</span>
+                    <Euro size={12}/><span>Reste à payer : {fmt(s.solde)}</span>
                   </div>
                 )}
                 {s.solde < 0 && (
                   <div style={{fontSize:13,color:'var(--sage)',display:'flex',alignItems:'center',gap:5}}>
-                    <Euro size={12}/>
-                    <span>Avance de {fmt(Math.abs(s.solde))}</span>
+                    <Euro size={12}/><span>Avance de {fmt(Math.abs(s.solde))}</span>
                   </div>
                 )}
               </>
@@ -268,23 +262,18 @@ function CompteRendu({ gites }) {
   )
 }
 
-export default function Dashboard() {
-  const { gites } = useGites()
-  const rawResas  = useAllReservations(gites)
-  const allLow    = useAllStocks(gites)
+// ─── gites reçu en PROP depuis App — plus de useGites() ici ──────────────────
+export default function Dashboard({ gites = [] }) {
+  const rawResas = useAllReservations(gites)
+  const allLow   = useAllStocks(gites)
   const [showAddResa, setShowAddResa] = useState(false)
 
-  // Enrichir les réservations avec colorIdx et giteNom
   const allResas = useMemo(() =>
     rawResas
       .filter(r => r.statut !== 'annule')
       .map(r => {
         const idx = gites.findIndex(g => g.id === r.gite_id)
-        return {
-          ...r,
-          colorIdx: idx >= 0 ? idx : 0,
-          giteNom: gites[idx]?.nom ?? '',
-        }
+        return { ...r, colorIdx: idx >= 0 ? idx : 0, giteNom: gites[idx]?.nom ?? '' }
       }),
     [rawResas, gites]
   )
@@ -330,10 +319,7 @@ export default function Dashboard() {
       <CompteRendu gites={gites}/>
 
       {showAddResa && (
-        <AddResaModal
-          gites={gites}
-          onSave={handleAddResa}
-          onClose={() => setShowAddResa(false)}/>
+        <AddResaModal gites={gites} onSave={handleAddResa} onClose={() => setShowAddResa(false)}/>
       )}
     </div>
   )
