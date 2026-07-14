@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { Plus, Trash2, X, Check, Clock, TrendingUp, ChevronDown, ChevronUp, Archive } from 'lucide-react'
 import { useHeures, parseduree, formatMinutes } from '../hooks/useHeures'
 import { useVersements } from '../hooks/useVersements'
-import { useGites } from '../hooks/useGites'
 
 const MONTHS_FR = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc']
 function formatMonth(str) {
@@ -185,9 +184,8 @@ function ArchiverModal({ gite, sessions, versements, onArchive, onClose }) {
   )
 }
 
-export default function Heures({ giteId }) {
-  const { gites } = useGites()
-  const gite = gites.find(g => g.id === giteId)
+// gite reçu en prop depuis App — plus de useGites() ici
+export default function Heures({ giteId, gite }) {
   const isAmiable = !gite || gite.mode_suivi === 'amiable'
 
   const { sessions, paiements, loading, addSession, deleteSession, deletePaiement, archiverSelection, statsByMonth, statsByYear } = useHeures(giteId)
