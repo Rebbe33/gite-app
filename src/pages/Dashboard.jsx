@@ -27,27 +27,25 @@ function useAllStocks(gites) {
 }
 
 // ─── Encadré urgence ménage ───────────────────────────────────────────────────
-function UrgencyCard({ resa, onFaire, onDejaFait }) {
-  const today = new Date(); today.setHours(0,0,0,0)
-  const depart = new Date(resa.date_depart); depart.setHours(0,0,0,0)
-  const diff = Math.round((depart - today) / 86400000)
+function UrgencyCard({ cleaning, onFaire, onDejaFait }) {
+  const { giteNom, prevResa, nextResa, daysLeft, colorIdx } = cleaning
 
   let emoji, message, color, bg, border
-  if (diff < 0) {
+  if (daysLeft <= 0) {
     emoji = '🚨'
-    message = `En retard de ${Math.abs(diff)} jour${Math.abs(diff)>1?'s':''} — ménage non fait !`
+    message = 'Urgent — les prochains locataires arrivent aujourd\'hui !'
     color = '#b33030'; bg = '#fff5f5'; border = '#ffb3b3'
-  } else if (diff === 0) {
+  } else if (daysLeft === 1) {
     emoji = '⚠️'
-    message = 'Urgent — dernier jour pour faire le ménage'
+    message = 'Plus qu\'1 jour avant les prochains locataires'
     color = '#c9853a'; bg = '#fffaf0'; border = '#ffd599'
-  } else if (diff === 1) {
+  } else if (daysLeft === 2) {
     emoji = '🕐'
-    message = "Plus qu'1 jour pour faire le ménage"
+    message = 'Plus que 2 jours pour faire le ménage'
     color = '#c9853a'; bg = '#fffcf0'; border = '#ffe5b3'
   } else {
     emoji = '🧹'
-    message = `Plus que ${diff} jours pour faire le ménage`
+    message = `Plus que ${daysLeft} jours pour faire le ménage`
     color = '#4a7c59'; bg = '#f4faf6'; border = '#b3d9c0'
   }
 
@@ -55,53 +53,49 @@ function UrgencyCard({ resa, onFaire, onDejaFait }) {
     <div style={{
       background: bg,
       border: `1px solid ${border}`,
+      borderLeft: `4px solid ${color}`,
       borderRadius: 12,
       padding: '12px 14px',
       marginBottom: 10,
     }}>
-      <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:4 }}>
+      {/* Titre */}
+      <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:8 }}>
         <span style={{ fontSize:16 }}>{emoji}</span>
         <span style={{ fontWeight:600, fontSize:13, color }}>{message}</span>
       </div>
-      <div style={{ fontSize:12, color:'var(--text-2)', marginBottom:10 }}>
-        <strong>{resa.giteNom}</strong>
-        {' — départ le '}
-        {new Date(resa.date_depart).toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'})}
-        {' · '}
-        {resa.nom_locataire}
-        {resa.nb_personnes ? ` · ${resa.nb_personnes} pers.` : ''}
+
+      {/* Gîte + détails */}
+      <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:6 }}>
+        <span style={{ width:8, height:8, borderRadius:'50%', background: GITE_COLORS[colorIdx], display:'inline-block', flexShrink:0 }}/>
+        <span style={{ fontWeight:600, fontSize:13 }}>{giteNom}</span>
       </div>
+      <div style={{ fontSize:12, color:'var(--text-2)', marginBottom:4, paddingLeft:14 }}>
+        🚪 Départ : <strong>{prevResa.nom_locataire}</strong> le{' '}
+        {new Date(prevResa.date_depart).toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'long'})}
+      </div>
+      <div style={{ fontSize:12, color:'var(--text-2)', marginBottom:10, paddingLeft:14 }}>
+        🏠 Arrivée : <strong>{nextResa.nom_locataire}</strong> le{' '}
+        {new Date(nextResa.date_arrivee).toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'long'})}
+        {nextResa.nb_personnes ? ` · ${nextResa.nb_personnes} pers.` : ''}
+      </div>
+
+      {/* Actions */}
       <div style={{ display:'flex', gap:8 }}>
         <button
-          onClick={() => onFaire(resa)}
+          onClick={() => onFaire(cleaning)}
           style={{
-            flex: 1,
-            background: color,
-            color: '#fff',
-            border: 'none',
-            borderRadius: 8,
-            padding: '9px 0',
-            fontSize: 13,
-            fontWeight: 600,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 6,
+            flex: 1, background: color, color: '#fff', border: 'none',
+            borderRadius: 8, padding: '9px 0', fontSize: 13, fontWeight: 600,
+            cursor: 'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:6,
           }}>
           🧹 Faire le ménage
         </button>
         <button
-          onClick={() => onDejaFait(resa)}
+          onClick={() => onDejaFait(cleaning)}
           style={{
-            padding: '9px 14px',
-            background: 'transparent',
-            border: `1px solid ${border}`,
-            borderRadius: 8,
-            fontSize: 12,
-            color: 'var(--text-2)',
-            cursor: 'pointer',
-            whiteSpace: 'nowrap',
+            padding: '9px 14px', background: 'transparent',
+            border: `1px solid ${border}`, borderRadius: 8,
+            fontSize: 12, color: 'var(--text-2)', cursor: 'pointer', whiteSpace:'nowrap',
           }}>
           Déjà fait ✓
         </button>
@@ -369,9 +363,8 @@ export default function Dashboard({ gites = [] }) {
   const rawResas = useAllReservations(gites)
   const allLow   = useAllStocks(gites)
   const [showAddResa, setShowAddResa] = useState(false)
-  const [menagePopup, setMenagePopup] = useState(null) // { giteId, giteNom, resaKey }
+  const [menagePopup, setMenagePopup] = useState(null)
 
-  // Clés des alertes déjà dismissées (stockées en localStorage)
   const [dismissedKeys, setDismissedKeys] = useState(() => {
     try { return new Set(JSON.parse(localStorage.getItem('passage-dismissed') || '[]')) }
     catch { return new Set() }
@@ -393,18 +386,52 @@ export default function Dashboard({ gites = [] }) {
     [rawResas, gites]
   )
 
-  // Réservations dont le départ est dans les 3 prochains jours (ou en retard de max 2 jours)
-  const urgentResas = useMemo(() => {
+  // ── Alertes ménage : fenêtre entre deux réservations ──────────────────────
+  // On cherche les paires consécutives (départ client A → arrivée client B)
+  // et on alerte si aujourd'hui est dans cette fenêtre de ménage
+  const urgentCleanings = useMemo(() => {
     const today = new Date(); today.setHours(0,0,0,0)
-    return allResas
-      .filter(r => {
-        const key = `${r.gite_id}-${r.id}`
-        if (dismissedKeys.has(key)) return false
-        const depart = new Date(r.date_depart); depart.setHours(0,0,0,0)
-        const diff = Math.round((depart - today) / 86400000)
-        return diff >= -2 && diff <= 3
-      })
-      .sort((a,b) => new Date(a.date_depart) - new Date(b.date_depart))
+    const results = []
+
+    // Grouper par gîte
+    const byGite = {}
+    allResas.forEach(r => {
+      if (!byGite[r.gite_id]) byGite[r.gite_id] = []
+      byGite[r.gite_id].push(r)
+    })
+
+    Object.entries(byGite).forEach(([giteId, resas]) => {
+      // Trier par date d'arrivée
+      const sorted = [...resas].sort((a,b) => new Date(a.date_arrivee) - new Date(b.date_arrivee))
+
+      for (let i = 0; i < sorted.length - 1; i++) {
+        const prev = sorted[i]
+        const next = sorted[i + 1]
+
+        const depart  = new Date(prev.date_depart);  depart.setHours(0,0,0,0)
+        const arrivee = new Date(next.date_arrivee); arrivee.setHours(0,0,0,0)
+
+        // On est dans la fenêtre de ménage si :
+        // aujourd'hui >= date de départ ET aujourd'hui < date d'arrivée suivante
+        if (today >= depart && today < arrivee) {
+          const daysLeft = Math.round((arrivee - today) / 86400000)
+          const key = `clean-${prev.id}-${next.id}`
+          if (!dismissedKeys.has(key)) {
+            results.push({
+              giteId,
+              giteNom: prev.giteNom,
+              colorIdx: prev.colorIdx,
+              prevResa: prev,
+              nextResa: next,
+              daysLeft,
+              key,
+            })
+          }
+        }
+      }
+    })
+
+    return results.sort((a,b) => a.daysLeft - b.daysLeft)
   }, [allResas, dismissedKeys])
 
   const handleAddResa = async (form) => {
@@ -419,23 +446,15 @@ export default function Dashboard({ gites = [] }) {
 
   return (
     <div>
-      {/* ── Alertes ménage urgentes ── */}
-      {urgentResas.length > 0 && (
-        <div>
-          {urgentResas.map(r => (
-            <UrgencyCard
-              key={`${r.gite_id}-${r.id}`}
-              resa={r}
-              onFaire={(resa) => setMenagePopup({
-                giteId: resa.gite_id,
-                giteNom: resa.giteNom,
-                resaKey: `${resa.gite_id}-${resa.id}`,
-              })}
-              onDejaFait={(resa) => dismiss(`${resa.gite_id}-${resa.id}`)}
-            />
-          ))}
-        </div>
-      )}
+      {/* ── Alertes ménage ── */}
+      {urgentCleanings.map(cleaning => (
+        <UrgencyCard
+          key={cleaning.key}
+          cleaning={cleaning}
+          onFaire={(c) => setMenagePopup({ giteId: c.giteId, giteNom: c.giteNom, key: c.key })}
+          onDejaFait={(c) => dismiss(c.key)}
+        />
+      ))}
 
       <CalendarSection gites={gites} allResas={allResas} onAddResa={() => setShowAddResa(true)}/>
 
@@ -465,15 +484,11 @@ export default function Dashboard({ gites = [] }) {
         <AddResaModal gites={gites} onSave={handleAddResa} onClose={() => setShowAddResa(false)}/>
       )}
 
-      {/* ── Popup ménage ── */}
       {menagePopup && (
         <MenagePopup
           giteId={menagePopup.giteId}
           giteNom={menagePopup.giteNom}
-          onPassageClosed={() => {
-            dismiss(menagePopup.resaKey)
-            setMenagePopup(null)
-          }}
+          onPassageClosed={() => { dismiss(menagePopup.key); setMenagePopup(null) }}
           onClose={() => setMenagePopup(null)}
         />
       )}
