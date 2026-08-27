@@ -44,7 +44,9 @@ function TaskEditModal({ task, onSave, onClose }) {
   )
 }
 
-export default function Menage({ giteId }) {
+// onPassageClosed est optionnel — appelé quand le passage est clôturé
+// (utilisé quand Menage est ouvert en popup depuis le Dashboard)
+export default function Menage({ giteId, onPassageClosed }) {
   const {
     tasks, passage, passageCount,
     toggleTask, closePassage, isTaskDone, isDue,
@@ -69,6 +71,8 @@ export default function Menage({ giteId }) {
   const handleClosePassage = async () => {
     await closePassage()
     setShowCloseConfirm(false)
+    // Si on est en popup depuis le Dashboard, prévenir que le passage est fait
+    onPassageClosed?.()
   }
 
   const dueTasks = tasks.filter(isDue)
@@ -87,8 +91,8 @@ export default function Menage({ giteId }) {
     return acc
   }, {})
 
-  const doneDue  = dueTasks.filter(t => isTaskDone(t.id)).length
-  const pct      = dueTasks.length ? Math.round(doneDue / dueTasks.length * 100) : 0
+  const doneDue = dueTasks.filter(t => isTaskDone(t.id)).length
+  const pct     = dueTasks.length ? Math.round(doneDue / dueTasks.length * 100) : 0
 
   const handleImport = async (e) => {
     const file = e.target.files?.[0]
@@ -110,7 +114,6 @@ export default function Menage({ giteId }) {
 
   return (
     <div>
-      {/* Stats passage */}
       <div className="passage-info-bar">
         <span className="passage-num-label">Passage #{nextPassage}</span>
         <span className="passage-progress">{doneDue}/{dueTasks.length} tâches dues</span>
@@ -119,7 +122,6 @@ export default function Menage({ giteId }) {
         </div>
       </div>
 
-      {/* Barre d'outils */}
       <div className="toolbar">
         <div className="view-toggle">
           <button className={`toggle-btn ${viewMode==='due'?'active':''}`} onClick={() => setViewMode('due')}>
@@ -140,11 +142,8 @@ export default function Menage({ giteId }) {
         </div>
       </div>
 
-      {importError && (
-        <div className="error-banner"><AlertCircle size={14} />{importError}</div>
-      )}
+      {importError && <div className="error-banner"><AlertCircle size={14} />{importError}</div>}
 
-      {/* Filtres */}
       <div className="filters">
         <div className="filter-pills">
           <button className={`pill ${zoneFilter==='all'?'active':''}`} onClick={() => setZoneFilter('all')}>Tout</button>
@@ -169,7 +168,6 @@ export default function Menage({ giteId }) {
         </div>
       </div>
 
-      {/* Tâches groupées par zone */}
       {Object.keys(byZone).length === 0 && (
         <div className="empty-tasks">
           {tasks.length === 0
@@ -180,8 +178,8 @@ export default function Menage({ giteId }) {
       )}
 
       {Object.entries(byZone).map(([zone, zoneTasks]) => {
-        const zoneDone  = zoneTasks.filter(t => isTaskDone(t.id)).length
-        const isOpen    = expandedZones[zone] !== false
+        const zoneDone = zoneTasks.filter(t => isTaskDone(t.id)).length
+        const isOpen   = expandedZones[zone] !== false
         return (
           <div key={zone} className="zone-card">
             <div className="zone-header" onClick={() => setExpandedZones(p => ({ ...p, [zone]: !isOpen }))}>
@@ -192,17 +190,15 @@ export default function Menage({ giteId }) {
               </div>
               {isOpen ? <ChevronUp size={15} color="#9c9890" /> : <ChevronDown size={15} color="#9c9890" />}
             </div>
-
             {isOpen && (
               <ul className="task-list">
                 {zoneTasks.map(t => {
-                  const done    = isTaskDone(t.id)
-                  const due     = isDue(t)
+                  const done     = isTaskDone(t.id)
+                  const due      = isDue(t)
                   const freqInfo = FREQ_INFO[t.freq] || { short: `×${t.freq}`, color: '#6b6560', bg: '#f5f3f0' }
                   return (
                     <li key={t.id} className={`task-item ${done ? 'done' : ''} ${!due && viewMode==='all' ? 'not-due' : ''}`}>
-                      <div className={`checkbox ${done ? 'checked' : ''}`}
-                        onClick={() => handleToggle(t.id)}>
+                      <div className={`checkbox ${done ? 'checked' : ''}`} onClick={() => handleToggle(t.id)}>
                         {done && <Check size={11} color="white" strokeWidth={3} />}
                       </div>
                       <div className="task-body" onClick={() => handleToggle(t.id)}>
@@ -213,9 +209,7 @@ export default function Menage({ giteId }) {
                         <span className="freq-badge" style={{ color: freqInfo.color, background: freqInfo.bg }}>
                           {freqInfo.short}
                         </span>
-                        {!due && viewMode === 'all' && (
-                          <span className="not-due-badge">pas due</span>
-                        )}
+                        {!due && viewMode === 'all' && <span className="not-due-badge">pas due</span>}
                         <div className="task-actions">
                           <button className="icon-btn-xs" onClick={() => setEditingTask(t)}><Pencil size={12} /></button>
                           <button className="icon-btn-xs danger" onClick={() => window.confirm('Supprimer ?') && deleteTask(t.id)}><Trash2 size={12} /></button>
@@ -230,7 +224,6 @@ export default function Menage({ giteId }) {
         )
       })}
 
-      {/* Clôture */}
       {tasks.length > 0 && (
         <div className="close-passage-wrap">
           {doneDue < dueTasks.length && (
@@ -245,7 +238,6 @@ export default function Menage({ giteId }) {
         </div>
       )}
 
-      {/* Modals */}
       {showCloseConfirm && (
         <div className="modal-overlay" onClick={() => setShowCloseConfirm(false)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
