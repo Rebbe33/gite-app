@@ -413,7 +413,7 @@ export default function Dashboard({ gites = [] }) {
 
         // On est dans la fenêtre de ménage si :
         // aujourd'hui >= date de départ ET aujourd'hui < date d'arrivée suivante
-        if (today >= depart && today < arrivee) {
+        if (today >= depart && today <= arrivee) {
           const daysLeft = Math.round((arrivee - today) / 86400000)
           const key = `clean-${prev.id}-${next.id}`
           if (!dismissedKeys.has(key)) {
