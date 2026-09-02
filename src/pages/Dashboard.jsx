@@ -86,7 +86,7 @@ function ProchainsDeparts({ gites, allResas }) {
     const depart = new Date(r.date_depart); depart.setHours(0,0,0,0)
     const diff = Math.round((depart - today) / 86400000)
     return { gite, colorIdx: i, resa: r, diff }
-  }).filter(Boolean)
+  }).filter(Boolean).sort((a,b) => a.diff - b.diff)
 
   if (!prochains.length) return null
 
