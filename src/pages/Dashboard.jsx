@@ -86,7 +86,7 @@ function ProchainsDeparts({ gites, allResas }) {
     const depart = new Date(r.date_depart); depart.setHours(0,0,0,0)
     const diff = Math.round((depart - today) / 86400000)
     return { gite, colorIdx: i, resa: r, diff }
-  }).filter(Boolean).sort((a,b) => a.diff - b.diff)
+  }).filter(Boolean)
 
   if (!prochains.length) return null
 
@@ -127,6 +127,57 @@ function ProchainsDeparts({ gites, allResas }) {
           </div>
         )
       })}
+    </div>
+  )
+}
+
+// ─── Passages restants avant fin d'année ─────────────────────────────────────
+function PassagesAnnee({ gites, allResas }) {
+  const today    = new Date(); today.setHours(0,0,0,0)
+  const finAnnee = new Date(today.getFullYear(), 11, 31); finAnnee.setHours(23,59,59,999)
+
+  const data = gites.map((gite, i) => {
+    const count = allResas.filter(r => {
+      if (r.gite_id !== gite.id) return false
+      const depart = new Date(r.date_depart); depart.setHours(0,0,0,0)
+      return depart >= today && depart <= finAnnee
+    }).length
+    return { gite, colorIdx: i, count }
+  }).filter(d => d.count > 0)
+    .sort((a, b) => a.count - b.count)
+
+  if (!data.length) return null
+
+  return (
+    <div className="card" style={{ marginBottom: 10 }}>
+      <div className="card-header" style={{ marginBottom: 8 }}>
+        <span className="card-title">📆 Passages avant fin {new Date().getFullYear()}</span>
+      </div>
+      {data.map(({ gite, colorIdx, count }) => (
+        <div key={gite.id} style={{
+          display:'flex', alignItems:'center', gap:10,
+          padding:'8px 0', borderBottom:'0.5px solid var(--border-2)'
+        }}>
+          <span style={{
+            width:10, height:10, borderRadius:'50%',
+            background: GITE_COLORS[colorIdx], flexShrink:0
+          }}/>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:13, fontWeight:600 }}>{gite.nom}</div>
+          </div>
+          <span style={{
+            fontSize:12, fontWeight:600,
+            color: count <= 3 ? '#4a7c59' : '#185fa5',
+            background: (count <= 3 ? '#4a7c59' : '#185fa5') + '18',
+            padding:'3px 10px', borderRadius:20, whiteSpace:'nowrap'
+          }}>
+            {count} passage{count > 1 ? 's' : ''}
+          </span>
+        </div>
+      ))}
+      <div style={{ fontSize:11, color:'var(--text-3)', marginTop:8 }}>
+        Nombre de ménages restants jusqu'au 31 décembre
+      </div>
     </div>
   )
 }
@@ -538,6 +589,9 @@ export default function Dashboard({ gites = [] }) {
 
       {/* ── Prochains départs ── */}
       <ProchainsDeparts gites={gites} allResas={allResas} />
+
+      {/* ── Passages restants avant fin d'année ── */}
+      <PassagesAnnee gites={gites} allResas={allResas} />
 
       <CalendarSection gites={gites} allResas={allResas} onAddResa={() => setShowAddResa(true)}/>
 
