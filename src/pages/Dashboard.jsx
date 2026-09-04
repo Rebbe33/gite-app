@@ -131,6 +131,83 @@ function ProchainsDeparts({ gites, allResas }) {
   )
 }
 
+// ─── Statut occupation des gîtes ─────────────────────────────────────────────
+function StatutGites({ gites, allResas }) {
+  const today = new Date(); today.setHours(0,0,0,0)
+
+  const statuts = gites.map((gite, i) => {
+    const resasGite = allResas.filter(r => r.gite_id === gite.id)
+
+    // Réservation en cours ?
+    const enCours = resasGite.find(r => {
+      const arrivee = new Date(r.date_arrivee); arrivee.setHours(0,0,0,0)
+      const depart  = new Date(r.date_depart);  depart.setHours(0,0,0,0)
+      return today >= arrivee && today <= depart
+    })
+
+    // Prochaine arrivée
+    const prochaineArrivee = resasGite
+      .filter(r => { const a = new Date(r.date_arrivee); a.setHours(0,0,0,0); return a > today })
+      .sort((a,b) => new Date(a.date_arrivee) - new Date(b.date_arrivee))[0]
+
+    return { gite, colorIdx: i, enCours, prochaineArrivee }
+  })
+
+  return (
+    <div className="card" style={{ marginBottom: 10 }}>
+      <div className="card-header" style={{ marginBottom: 8 }}>
+        <span className="card-title">🏡 Statut des gîtes</span>
+      </div>
+      {statuts.map(({ gite, colorIdx, enCours, prochaineArrivee }) => {
+        const occupied = !!enCours
+        const depart   = enCours ? new Date(enCours.date_depart) : null
+        const arrivee  = prochaineArrivee ? new Date(prochaineArrivee.date_arrivee) : null
+        const diffDepart = depart ? Math.round((depart - today) / 86400000) : null
+
+        return (
+          <div key={gite.id} style={{
+            display:'flex', alignItems:'center', gap:10,
+            padding:'9px 0', borderBottom:'0.5px solid var(--border-2)'
+          }}>
+            {/* Indicateur couleur gîte */}
+            <span style={{ width:10, height:10, borderRadius:'50%', background:GITE_COLORS[colorIdx], flexShrink:0 }}/>
+
+            {/* Nom + détail */}
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ fontSize:13, fontWeight:600 }}>{gite.nom}</div>
+              <div style={{ fontSize:11, color:'var(--text-2)', marginTop:1 }}>
+                {occupied
+                  ? <>
+                      {enCours.nom_locataire}
+                      {' · départ '}
+                      {diffDepart === 0 ? "aujourd'hui"
+                        : diffDepart === 1 ? 'demain'
+                        : depart.toLocaleDateString('fr-FR',{day:'numeric',month:'short'})}
+                    </>
+                  : arrivee
+                    ? <>Libre · prochaine arrivée le {arrivee.toLocaleDateString('fr-FR',{day:'numeric',month:'short'})}</>
+                    : 'Libre · aucune réservation'
+                }
+              </div>
+            </div>
+
+            {/* Badge statut */}
+            <span style={{
+              fontSize:12, fontWeight:600, padding:'3px 10px', borderRadius:20,
+              whiteSpace:'nowrap',
+              color:      occupied ? '#b33030' : '#4a7c59',
+              background: occupied ? '#fff0f0' : '#f0faf4',
+              border:     `1px solid ${occupied ? '#ffb3b3' : '#b3d9c0'}`,
+            }}>
+              {occupied ? '🔴 Occupé' : '🟢 Libre'}
+            </span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 // ─── Passages restants avant fin d'année ─────────────────────────────────────
 function PassagesAnnee({ gites, allResas }) {
   const today    = new Date(); today.setHours(0,0,0,0)
@@ -577,6 +654,9 @@ export default function Dashboard({ gites = [] }) {
 
   return (
     <div>
+      {/* ── Statut des gîtes ── */}
+      <StatutGites gites={gites} allResas={allResas} />
+
       {/* ── Alertes ménage ── */}
       {urgentCleanings.map(cleaning => (
         <UrgencyCard
