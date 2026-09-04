@@ -1,5 +1,5 @@
 import { useState, Component } from 'react'
-import { Calendar, ClipboardList, Package, StickyNote, Clock, Plus, Settings, X, Check, Trash2, Upload, Home } from 'lucide-react'
+import { Calendar, ClipboardList, Package, StickyNote, Clock, Plus, Settings, X, Check, Trash2, Upload, Home, Euro } from 'lucide-react'
 import { useGites } from './hooks/useGites'
 import { parseTasksExcel } from './lib/excel'
 
@@ -178,7 +178,7 @@ function GiteApp({ gite, tab }) {
       {tab==='menage'   && <ErrorBoundary name="Menage"  ><Menage    giteId={gite.id}/></ErrorBoundary>}
       {tab==='stocks'   && <ErrorBoundary name="Stocks"  ><Stocks    giteId={gite.id}/></ErrorBoundary>}
       {tab==='notes'    && <ErrorBoundary name="Notes"   ><Notes     giteId={gite.id} giteName={gite.nom}/></ErrorBoundary>}
-      {tab==='heures' && <ErrorBoundary name="Heures"><Heures giteId={gite.id} gite={gite}/></ErrorBoundary>}
+      {tab==='heures'   && <ErrorBoundary name="Heures"  ><Heures    giteId={gite.id}/></ErrorBoundary>}
       {tab==='finances' && <ErrorBoundary name="Finances"><Finances  giteId={gite.id}/></ErrorBoundary>}
     </main>
   )
@@ -187,7 +187,7 @@ function GiteApp({ gite, tab }) {
 export default function App() {
   const { gites, loading, error, addGite, deleteGite, renameGite, updateGite } = useGites()
   const [activeGiteId, setActiveGiteId] = useState(null)
-  const [tab, setTab] = useState('dashboard')
+  const [tab, setTab] = useState('menage')
   const [showAddGite, setShowAddGite] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
 
@@ -278,11 +278,12 @@ export default function App() {
       {gites.length > 0 && tab!=='dashboard' && (
         <nav className="nav">
           {[
-            { id:'planning', label:'Planning', Icon:Calendar },
-            { id:'menage',   label:'Ménage',   Icon:ClipboardList },
-            { id:'stocks',   label:'Stocks',   Icon:Package },
-            { id:'notes',    label:'Notes',    Icon:StickyNote },
-            { id:'heures',   label:'Heures',   Icon:Clock },
+            { id:'planning',  label:'Planning',  Icon:Calendar },
+            { id:'menage',    label:'Ménage',    Icon:ClipboardList },
+            { id:'stocks',    label:'Stocks',    Icon:Package },
+            { id:'notes',     label:'Notes',     Icon:StickyNote },
+            { id:'heures',    label:'Heures',    Icon:Clock },
+            { id:'finances',  label:'Finances',  Icon:Euro },
           ].map(({id,label,Icon}) => (
             <button key={id} className={`nav-btn ${tab===id?'active':''}`} onClick={()=>setTab(id)}>
               <Icon size={17}/><span>{label}</span>
