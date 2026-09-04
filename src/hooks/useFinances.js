@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 
 export function useFinances(giteId = null) {
@@ -30,16 +30,22 @@ export function useFinances(giteId = null) {
     setLoading(false)
   }, [giteId])
 
+  // Ref pour toujours appeler la version fraîche de fetch sans recréer le channel
+  const fetchRef = useRef(fetch)
+  useEffect(() => { fetchRef.current = fetch }, [fetch])
+
+  // Nom de channel unique par instance → jamais de conflit
+  const channelName = useRef(`finances-${Math.random().toString(36).slice(2)}`)
+
   useEffect(() => {
     fetch()
-    const chanId = giteId || 'all'
-    const sub = supabase.channel(`finances-${chanId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'gite_montants_dus' }, fetch)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'gite_versements' }, fetch)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'gite_versements_historique' }, fetch)
+    const sub = supabase.channel(channelName.current)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'gite_montants_dus' },          () => fetchRef.current())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'gite_versements' },            () => fetchRef.current())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'gite_versements_historique' }, () => fetchRef.current())
       .subscribe()
     return () => supabase.removeChannel(sub)
-  }, [fetch])
+  }, [giteId]) // Ne se recrée que si giteId change, pas à chaque render
 
   const addMontantDu = async ({ gite_id, montant, description, date_prestation, passage_id = null }) => {
     await supabase.from('gite_montants_dus').insert({ gite_id, montant, description, date_prestation, passage_id })
@@ -67,7 +73,6 @@ export function useFinances(giteId = null) {
       return
     }
 
-    // Récupérer reliquats précédents + sessions
     const { data: versementsExistants } = await supabase
       .from('gite_versements').select('*').eq('gite_id', gite_id)
       .order('date_versement', { ascending: true })
@@ -98,7 +103,6 @@ export function useFinances(giteId = null) {
       if (budget < 0.01) break
     }
 
-    // Archiver les sessions couvertes
     if (sessionsAArchiver.length > 0) {
       const dates    = sessionsAArchiver.map(s => s.date_session).sort()
       const totalMin = sessionsAArchiver.reduce((s, x) => s + x.duree_minutes, 0)
@@ -120,21 +124,17 @@ export function useFinances(giteId = null) {
       }
     }
 
-    // Calculer montant consommé
     const montantConsomme = Math.round((Number(montant) + totalReliquats - budget) * 100) / 100
-
-    // Enregistrer dans l'historique
     await supabase.from('gite_versements_historique').insert({
       gite_id,
-      montant_brut: Number(montant),
-      montant_consomme: Math.min(montantConsomme, Number(montant)),
-      reliquat: Math.max(0, Math.round(budget * 100) / 100),
+      montant_brut:        Number(montant),
+      montant_consomme:    Math.min(montantConsomme, Number(montant)),
+      reliquat:            Math.max(0, Math.round(budget * 100) / 100),
       date_versement,
-      note: note || '',
+      note:                note || '',
       nb_sessions_archivees: sessionsAArchiver.length,
     })
 
-    // Supprimer anciens reliquats et stocker le nouveau
     if (versementsExistants && versementsExistants.length > 0)
       await supabase.from('gite_versements').delete().in('id', versementsExistants.map(v => v.id))
 
