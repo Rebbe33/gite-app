@@ -187,7 +187,7 @@ function GiteApp({ gite, tab }) {
 export default function App() {
   const { gites, loading, error, addGite, deleteGite, renameGite, updateGite } = useGites()
   const [activeGiteId, setActiveGiteId] = useState(null)
-  const [tab, setTab] = useState('menage')
+  const [tab, setTab] = useState('dashboard')
   const [showAddGite, setShowAddGite] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
 
