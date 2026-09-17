@@ -104,7 +104,7 @@ export default function Planning({ giteId }) {
   return (
     <div>
       {/* Calendrier — sticky : reste visible pendant le défilement des réservations */}
-      <div className="card" style={{ position: 'sticky', top: 0, zIndex: 10 }}>
+      <div className="card" style={{ position: 'sticky', top: 110, zIndex: 10 }}>
         <div className="card-header">
           <span className="card-title">{MONTHS[calMonth]} {calYear}</span>
           <div style={{ display:'flex', gap:6 }}>
