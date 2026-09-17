@@ -72,16 +72,15 @@ function ResaForm({ initial, giteId, onSave, onClose }) {
 export default function Planning({ giteId }) {
   const { reservations, add, update, remove } = useReservations(giteId)
   const [showForm, setShowForm] = useState(false)
-  const [editing, setEditing] = useState(null)
+  const [editing, setEditing]   = useState(null)
   const today = new Date()
-  const [calYear, setCalYear] = useState(today.getFullYear())
+  const [calYear, setCalYear]   = useState(today.getFullYear())
   const [calMonth, setCalMonth] = useState(today.getMonth())
 
   const upcoming = reservations
     .filter(r => r.statut !== 'annule' && new Date(r.date_depart) >= today)
     .sort((a, b) => new Date(a.date_arrivee) - new Date(b.date_arrivee))
 
-  // Jours occupés ce mois
   const occupiedDays = new Set()
   reservations.filter(r => r.statut !== 'annule').forEach(r => {
     const start = new Date(r.date_arrivee)
@@ -98,14 +97,16 @@ export default function Planning({ giteId }) {
     setShowForm(false); setEditing(null)
   }
 
-  const days = daysInMonth(calYear, calMonth)
+  const days     = daysInMonth(calYear, calMonth)
   const firstDay = firstDayOfWeek(calYear, calMonth)
   const todayDay = today.getFullYear() === calYear && today.getMonth() === calMonth ? today.getDate() : -1
 
   return (
     <div>
-      {/* Calendrier */}
-<div className="card" style={{ position: 'sticky', top: 0, zIndex: 10 }}>
+      {/* Calendrier — sticky : reste visible pendant le défilement des réservations */}
+      <div className="card" style={{ position: 'sticky', top: 0, zIndex: 10 }}>
+        <div className="card-header">
+          <span className="card-title">{MONTHS[calMonth]} {calYear}</span>
           <div style={{ display:'flex', gap:6 }}>
             <button className="btn-outline-sm" onClick={() => {
               if (calMonth === 0) { setCalMonth(11); setCalYear(y => y-1) } else setCalMonth(m => m-1)
@@ -119,8 +120,8 @@ export default function Planning({ giteId }) {
           {DAYS.map(d => <div key={d} className="cal-day-name">{d}</div>)}
           {Array.from({ length: firstDay }).map((_, i) => <div key={`e${i}`} />)}
           {Array.from({ length: days }).map((_, i) => {
-            const day = i + 1
-            const isToday = day === todayDay
+            const day        = i + 1
+            const isToday    = day === todayDay
             const isOccupied = occupiedDays.has(day)
             return (
               <div key={day} className={`cal-day ${isToday ? 'today' : ''} ${isOccupied ? 'occupied' : ''}`}>
