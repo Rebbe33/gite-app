@@ -417,7 +417,7 @@ function CalendarSection({ gites, allResas, onAddResa }) {
     .sort((a,b) => new Date(a.date_arrivee)-new Date(b.date_arrivee))
 
   return (
-    <div className="card">
+    <div className="card" style={{ position:'sticky', top:0, zIndex:10 }}>
       <div className="card-header">
         <span className="card-title">{MONTHS_FR[month]} {year}</span>
         <div style={{display:'flex',gap:6}}>
