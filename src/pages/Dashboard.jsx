@@ -417,43 +417,48 @@ function CalendarSection({ gites, allResas, onAddResa }) {
     .sort((a,b) => new Date(a.date_arrivee)-new Date(b.date_arrivee))
 
   return (
-    <div className="card" style={{ position:'sticky', top:0, zIndex:10 }}>
-      <div className="card-header">
-        <span className="card-title">{MONTHS_FR[month]} {year}</span>
-        <div style={{display:'flex',gap:6}}>
-          <button className="btn-outline-sm" onClick={()=>onAddResa()}><Plus size={13}/></button>
-          <button className="btn-outline-sm" onClick={()=>{if(month===0){setMonth(11);setYear(y=>y-1)}else setMonth(m=>m-1)}}>◀</button>
-          <button className="btn-outline-sm" onClick={()=>{if(month===11){setMonth(0);setYear(y=>y+1)}else setMonth(m=>m+1)}}>▶</button>
+    <>
+      {/* Calendrier sticky — séparé de la liste pour que le sticky fonctionne */}
+      <div className="card" style={{ position:'sticky', top:110, zIndex:10 }}>
+        <div className="card-header">
+          <span className="card-title">{MONTHS_FR[month]} {year}</span>
+          <div style={{display:'flex',gap:6}}>
+            <button className="btn-outline-sm" onClick={()=>onAddResa()}><Plus size={13}/></button>
+            <button className="btn-outline-sm" onClick={()=>{if(month===0){setMonth(11);setYear(y=>y-1)}else setMonth(m=>m-1)}}>◀</button>
+            <button className="btn-outline-sm" onClick={()=>{if(month===11){setMonth(0);setYear(y=>y+1)}else setMonth(m=>m+1)}}>▶</button>
+          </div>
+        </div>
+        <div style={{display:'flex',flexWrap:'wrap',gap:8,marginBottom:10}}>
+          {gites.map((g,i) => (
+            <div key={g.id} style={{display:'flex',alignItems:'center',gap:4,fontSize:12,color:'var(--text-2)'}}>
+              <span style={{width:10,height:10,borderRadius:3,background:GITE_COLORS[i],display:'inline-block'}}/>{g.nom}
+            </div>
+          ))}
+        </div>
+        <div className="cal-grid">
+          {DAYS_FR.map(d=><div key={d} className="cal-day-name">{d}</div>)}
+          {Array.from({length:firstDayOfWeek}).map((_,i)=><div key={`e${i}`}/>)}
+          {Array.from({length:daysInMonth}).map((_,i) => {
+            const day = i+1, entries = dayMap[day] || [], isToday = day === todayDay
+            return (
+              <div key={day} className={`cal-day ${isToday?'today':''}`}
+                style={{position:'relative',paddingBottom:entries.length?'10px':undefined}}>
+                <span style={{fontSize:13}}>{day}</span>
+                {entries.length > 0 && (
+                  <div style={{position:'absolute',bottom:2,left:0,right:0,display:'flex',gap:1,justifyContent:'center',flexWrap:'wrap'}}>
+                    {entries.map((e,idx) => (
+                      <span key={idx} style={{width:e.isTransition?3:5,height:5,borderRadius:e.isTransition?'1px':'50%',background:GITE_COLORS[e.colorIdx],opacity:e.isEnd||e.isStart?1:0.7}}/>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
       </div>
-      <div style={{display:'flex',flexWrap:'wrap',gap:8,marginBottom:10}}>
-        {gites.map((g,i) => (
-          <div key={g.id} style={{display:'flex',alignItems:'center',gap:4,fontSize:12,color:'var(--text-2)'}}>
-            <span style={{width:10,height:10,borderRadius:3,background:GITE_COLORS[i],display:'inline-block'}}/>{g.nom}
-          </div>
-        ))}
-      </div>
-      <div className="cal-grid">
-        {DAYS_FR.map(d=><div key={d} className="cal-day-name">{d}</div>)}
-        {Array.from({length:firstDayOfWeek}).map((_,i)=><div key={`e${i}`}/>)}
-        {Array.from({length:daysInMonth}).map((_,i) => {
-          const day = i+1, entries = dayMap[day] || [], isToday = day === todayDay
-          return (
-            <div key={day} className={`cal-day ${isToday?'today':''}`}
-              style={{position:'relative',paddingBottom:entries.length?'10px':undefined}}>
-              <span style={{fontSize:13}}>{day}</span>
-              {entries.length > 0 && (
-                <div style={{position:'absolute',bottom:2,left:0,right:0,display:'flex',gap:1,justifyContent:'center',flexWrap:'wrap'}}>
-                  {entries.map((e,idx) => (
-                    <span key={idx} style={{width:e.isTransition?3:5,height:5,borderRadius:e.isTransition?'1px':'50%',background:GITE_COLORS[e.colorIdx],opacity:e.isEnd||e.isStart?1:0.7}}/>
-                  ))}
-                </div>
-              )}
-            </div>
-          )
-        })}
-      </div>
-      <div style={{marginTop:10,borderTop:'0.5px solid var(--border-2)',paddingTop:10}}>
+
+      {/* Liste des réservations — card séparée, non-sticky */}
+      <div className="card">
         {monthResas.length === 0 && <p className="empty-text">Aucune réservation ce mois.</p>}
         {monthResas.map(r => (
           <div key={r.id} style={{display:'flex',alignItems:'center',gap:8,padding:'6px 0',borderBottom:'0.5px solid var(--border-2)'}}>
@@ -468,7 +473,7 @@ function CalendarSection({ gites, allResas, onAddResa }) {
           </div>
         ))}
       </div>
-    </div>
+    </>
   )
 }
 
