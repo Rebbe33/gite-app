@@ -105,9 +105,7 @@ export default function Planning({ giteId }) {
   return (
     <div>
       {/* Calendrier */}
-      <div className="card">
-        <div className="card-header">
-          <span className="card-title">{MONTHS[calMonth]} {calYear}</span>
+<div className="card" style={{ position: 'sticky', top: 0, zIndex: 10 }}>
           <div style={{ display:'flex', gap:6 }}>
             <button className="btn-outline-sm" onClick={() => {
               if (calMonth === 0) { setCalMonth(11); setCalYear(y => y-1) } else setCalMonth(m => m-1)
