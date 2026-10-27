@@ -34,7 +34,7 @@ export function useHeures(giteId = null) {
   const fetch = useCallback(async () => {
     setLoading(true)
     let sq = supabase.from('gite_heures_sessions')
-      .select('*, gite_gites(nom, mode_suivi, taux_horaire, forfait_montant, proprietaire)')
+      .select('*, gite_gites(nom, mode_suivi, taux_horaire, forfait_montant, proprietaire), gite_intervenants(nom)')
       .order('date_session', { ascending: false })
     let pq = supabase.from('gite_paiements')
       .select('*, gite_gites(nom)')
@@ -62,8 +62,8 @@ export function useHeures(giteId = null) {
     return () => supabase.removeChannel(sub)
   }, [giteId]) // Ne se recrée que si giteId change, pas à chaque render
 
-  const addSession = async ({ gite_id, passage_id = null, duree_minutes, date_session, note = '' }) => {
-    await supabase.from('gite_heures_sessions').insert({ gite_id, passage_id, duree_minutes, date_session, note })
+  const addSession = async ({ gite_id, passage_id = null, duree_minutes, date_session, note = '', intervenant_id = null }) => {
+    await supabase.from('gite_heures_sessions').insert({ gite_id, passage_id, duree_minutes, date_session, note, intervenant_id })
 
     // Auto-calcul montant dû pour taux horaire
     const { data: gite } = await supabase.from('gite_gites')
