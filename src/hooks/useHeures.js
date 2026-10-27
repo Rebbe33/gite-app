@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 
 export function parseduree(str) {
@@ -46,15 +46,21 @@ export function useHeures(giteId = null) {
     setLoading(false)
   }, [giteId])
 
+  // Ref pour toujours appeler la version fraîche de fetch sans recréer le channel
+  const fetchRef = useRef(fetch)
+  useEffect(() => { fetchRef.current = fetch }, [fetch])
+
+  // Nom de channel unique par instance → jamais de conflit
+  const channelName = useRef(`heures-${Math.random().toString(36).slice(2)}`)
+
   useEffect(() => {
     fetch()
-    const chanId = giteId || 'all'
-    const sub = supabase.channel(`heures-${chanId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'gite_heures_sessions' }, fetch)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'gite_paiements' }, fetch)
+    const sub = supabase.channel(channelName.current)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'gite_heures_sessions' }, () => fetchRef.current())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'gite_paiements' },       () => fetchRef.current())
       .subscribe()
     return () => supabase.removeChannel(sub)
-  }, [fetch])
+  }, [giteId]) // Ne se recrée que si giteId change, pas à chaque render
 
   const addSession = async ({ gite_id, passage_id = null, duree_minutes, date_session, note = '' }) => {
     await supabase.from('gite_heures_sessions').insert({ gite_id, passage_id, duree_minutes, date_session, note })
@@ -72,19 +78,26 @@ export function useHeures(giteId = null) {
         date_prestation: date_session,
       })
     }
+    if (gite?.mode_suivi === 'forfait' && gite.forfait_montant > 0) {
+      await supabase.from('gite_montants_dus').insert({
+        gite_id,
+        montant: Number(gite.forfait_montant),
+        description: `Forfait passage`,
+        date_prestation: date_session,
+      })
+    }
     await fetch()
   }
 
   const deleteSession = async (id) => {
-    // Supprimer aussi le montant dû associé si taux horaire
+    // Supprimer aussi le montant dû associé si taux horaire ou forfait
     const session = sessions.find(s => s.id === id)
-    if (session?.gite_gites?.mode_suivi === 'taux_horaire') {
-      // Supprimer le montant dû correspondant à cette session (même date, même gite)
+    const mode = session?.gite_gites?.mode_suivi
+    if (session && (mode === 'taux_horaire' || mode === 'forfait')) {
       await supabase.from('gite_montants_dus')
         .delete()
         .eq('gite_id', session.gite_id)
         .eq('date_prestation', session.date_session)
-        .like('description', `${formatMinutes(session.duree_minutes)}%`)
     }
     await supabase.from('gite_heures_sessions').delete().eq('id', id)
     await fetch()
@@ -95,13 +108,16 @@ export function useHeures(giteId = null) {
     await fetch()
   }
 
-  // Archiver une sélection + archivage auto si versement >= montant dû
+  // Archiver une sélection de sessions (+ versements amiable)
+  // Supprime aussi les montants_dus liés aux sessions archivées
   const archiverSelection = async (gite_id, sessionIds, versementIds, note = '') => {
     const selectedSessions = sessions.filter(s => sessionIds.includes(s.id))
     const totalMin = selectedSessions.reduce((s, x) => s + x.duree_minutes, 0)
     if (totalMin === 0) return
 
     const dates = selectedSessions.map(s => s.date_session).sort()
+
+    // 1. Archiver dans gite_paiements
     await supabase.from('gite_paiements').insert({
       gite_id,
       total_minutes: totalMin,
@@ -110,14 +126,28 @@ export function useHeures(giteId = null) {
       date_paiement: new Date().toISOString().split('T')[0],
       note,
     })
+
+    // 2. Supprimer les sessions
     if (sessionIds.length > 0)
       await supabase.from('gite_heures_sessions').delete().in('id', sessionIds)
+
+    // 3. Supprimer les montants_dus liés à ces sessions (par date_prestation)
+    //    Ceci évite que le reliquat reste positif sur le dashboard après archivage
+    const datePrestations = selectedSessions.map(s => s.date_session)
+    if (datePrestations.length > 0)
+      await supabase.from('gite_montants_dus')
+        .delete()
+        .eq('gite_id', gite_id)
+        .in('date_prestation', datePrestations)
+
+    // 4. Supprimer les versements amiable sélectionnés
     if (versementIds.length > 0)
       await supabase.from('gite_versements').delete().in('id', versementIds)
+
     await fetch()
   }
 
-  // Archivage automatique quand versement >= montant dû (taux fixe)
+  // Archivage automatique de toutes les sessions d'un gîte
   const archiverAuto = async (gite_id) => {
     const giteSessions = sessions.filter(s => s.gite_id === gite_id)
     if (giteSessions.length === 0) return
