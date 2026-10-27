@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Plus, Trash2, X, Check, Clock, TrendingUp, ChevronDown, ChevronUp, Archive } from 'lucide-react'
 import { useHeures, parseduree, formatMinutes } from '../hooks/useHeures'
 import { useVersements } from '../hooks/useVersements'
+import { useIntervenants } from '../hooks/useIntervenants'
 
 const MONTHS_FR = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc']
 function formatMonth(str) {
@@ -10,15 +11,15 @@ function formatMonth(str) {
 }
 function fmt(n) { return Number(n).toFixed(2).replace('.', ',') + ' €' }
 
-function AddSessionModal({ giteId, giteName, gite, onSave, onClose }) {
+function AddSessionModal({ giteId, giteName, gite, intervenants, onSave, onClose }) {
   const today = new Date().toISOString().split('T')[0]
-  const [form, setForm] = useState({ duree: '', date_session: today, note: '' })
+  const [form, setForm] = useState({ duree: '', date_session: today, note: '', intervenant_id: '' })
   const [error, setError] = useState('')
   const set = (k,v) => setForm(f => ({...f,[k]:v}))
   const handleSave = () => {
     const min = parseduree(form.duree)
     if (!min) { setError('Format invalide. Ex: 2h30, 1h, 45'); return }
-    onSave({ ...form, gite_id: giteId, duree_minutes: min })
+    onSave({ ...form, gite_id: giteId, duree_minutes: min, intervenant_id: form.intervenant_id || null })
   }
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -48,6 +49,15 @@ function AddSessionModal({ giteId, giteName, gite, onSave, onClose }) {
             <label>Date</label>
             <input type="date" value={form.date_session} onChange={e => set('date_session', e.target.value)}/>
           </div>
+          {intervenants.length > 0 && (
+            <div className="form-field full">
+              <label>Fait par</label>
+              <select value={form.intervenant_id} onChange={e => set('intervenant_id', e.target.value)}>
+                <option value="">Moi-même</option>
+                {intervenants.map(i => <option key={i.id} value={i.id}>{i.nom}</option>)}
+              </select>
+            </div>
+          )}
           <div className="form-field full">
             <label>Note <span style={{color:'#9c9890'}}>(optionnel)</span></label>
             <input value={form.note} onChange={e => set('note', e.target.value)} placeholder="Ménage complet..."/>
@@ -134,6 +144,11 @@ function ArchiverModal({ gite, sessions, versements, onArchive, onClose }) {
               <div className="session-left">
                 <div className="session-meta">
                   {new Date(s.date_session).toLocaleDateString('fr-FR',{day:'numeric',month:'short',year:'numeric'})}
+                  {s.gite_intervenants?.nom && (
+                    <span style={{background:'var(--sage-light)',color:'var(--sage)',borderRadius:4,padding:'1px 6px',fontSize:11,marginLeft:6}}>
+                      {s.gite_intervenants.nom}
+                    </span>
+                  )}
                   {s.note && ` · ${s.note}`}
                 </div>
               </div>
@@ -190,6 +205,7 @@ export default function Heures({ giteId, gite }) {
 
   const { sessions, paiements, loading, addSession, deleteSession, deletePaiement, archiverSelection, statsByMonth, statsByYear } = useHeures(giteId)
   const { versements, add: addVersement, remove: removeVersement } = useVersements(giteId)
+  const { intervenants } = useIntervenants(giteId)
 
   const [showAdd, setShowAdd]                   = useState(false)
   const [showAddVersement, setShowAddVersement] = useState(false)
@@ -242,6 +258,11 @@ export default function Heures({ giteId, gite }) {
                   <div className="session-left">
                     <div className="session-meta">
                       {new Date(s.date_session).toLocaleDateString('fr-FR',{day:'numeric',month:'short',year:'numeric'})}
+                      {s.gite_intervenants?.nom && (
+                        <span style={{background:'var(--sage-light)',color:'var(--sage)',borderRadius:4,padding:'1px 6px',fontSize:11,marginLeft:6,fontWeight:500}}>
+                          {s.gite_intervenants.nom}
+                        </span>
+                      )}
                       {s.note && ` · ${s.note}`}
                     </div>
                   </div>
@@ -349,7 +370,7 @@ export default function Heures({ giteId, gite }) {
       )}
 
       {showAdd && (
-        <AddSessionModal giteId={giteId} giteName={gite?.nom} gite={gite}
+        <AddSessionModal giteId={giteId} giteName={gite?.nom} gite={gite} intervenants={intervenants}
           onSave={async f=>{await addSession(f);setShowAdd(false)}}
           onClose={()=>setShowAdd(false)}/>
       )}
