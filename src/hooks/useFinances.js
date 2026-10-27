@@ -73,10 +73,12 @@ export function useFinances(giteId = null) {
       return
     }
 
+    // Récupérer reliquats précédents
     const { data: versementsExistants } = await supabase
       .from('gite_versements').select('*').eq('gite_id', gite_id)
       .order('date_versement', { ascending: true })
 
+    // Récupérer sessions en cours triées par date (les plus anciennes en premier)
     const { data: sessions } = await supabase
       .from('gite_heures_sessions').select('*').eq('gite_id', gite_id)
       .order('date_session', { ascending: true })
@@ -103,27 +105,32 @@ export function useFinances(giteId = null) {
       if (budget < 0.01) break
     }
 
+    // Archiver les sessions couvertes par le versement
     if (sessionsAArchiver.length > 0) {
       const dates    = sessionsAArchiver.map(s => s.date_session).sort()
       const totalMin = sessionsAArchiver.reduce((s, x) => s + x.duree_minutes, 0)
+
+      // 1. Créer l'entrée dans l'historique des paiements
       await supabase.from('gite_paiements').insert({
         gite_id, total_minutes: totalMin,
         periode_debut: dates[0], periode_fin: dates[dates.length - 1],
         date_paiement: date_versement,
         note: `Archivage auto — ${sessionsAArchiver.length} session(s)${note ? ' · ' + note : ''}`,
       })
+
+      // 2. Supprimer les sessions archivées
       await supabase.from('gite_heures_sessions')
         .delete().in('id', sessionsAArchiver.map(s => s.id))
-      for (const session of sessionsAArchiver) {
-        const { data: mdus } = await supabase.from('gite_montants_dus')
-          .select('id').eq('gite_id', gite_id)
-          .gte('montant', session.montantSession - 0.01)
-          .lte('montant', session.montantSession + 0.01).limit(1)
-        if (mdus && mdus.length > 0)
-          await supabase.from('gite_montants_dus').delete().eq('id', mdus[0].id)
-      }
+
+      // 3. Supprimer les montants_dus liés à ces sessions — par date_prestation (fiable)
+      const datePrestations = sessionsAArchiver.map(s => s.date_session)
+      await supabase.from('gite_montants_dus')
+        .delete()
+        .eq('gite_id', gite_id)
+        .in('date_prestation', datePrestations)
     }
 
+    // Calculer montant consommé et enregistrer dans l'historique
     const montantConsomme = Math.round((Number(montant) + totalReliquats - budget) * 100) / 100
     await supabase.from('gite_versements_historique').insert({
       gite_id,
@@ -135,6 +142,7 @@ export function useFinances(giteId = null) {
       nb_sessions_archivees: sessionsAArchiver.length,
     })
 
+    // Supprimer les anciens reliquats et stocker le nouveau s'il en reste un
     if (versementsExistants && versementsExistants.length > 0)
       await supabase.from('gite_versements').delete().in('id', versementsExistants.map(v => v.id))
 
