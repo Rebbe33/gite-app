@@ -39,6 +39,21 @@ export function useFinances(giteId = null) {
 
   useEffect(() => {
     fetch()
+    // Nettoyage des montants_dus orphelins au chargement (sessions archivées sans nettoyage préalable)
+    if (giteId) {
+      ;(async () => {
+        const [{ data: sessions }, { data: montants }] = await Promise.all([
+          supabase.from('gite_heures_sessions').select('date_session').eq('gite_id', giteId),
+          supabase.from('gite_montants_dus').select('id, date_prestation').eq('gite_id', giteId),
+        ])
+        const datesActives = new Set((sessions || []).map(s => s.date_session))
+        const idsOrphelins = (montants || []).filter(m => !datesActives.has(m.date_prestation)).map(m => m.id)
+        if (idsOrphelins.length > 0) {
+          await supabase.from('gite_montants_dus').delete().in('id', idsOrphelins)
+          fetchRef.current()
+        }
+      })()
+    }
     const sub = supabase.channel(channelName.current)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'gite_montants_dus' },          () => fetchRef.current())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'gite_versements' },            () => fetchRef.current())
@@ -128,6 +143,19 @@ export function useFinances(giteId = null) {
         .delete()
         .eq('gite_id', gite_id)
         .in('date_prestation', datePrestations)
+    }
+
+    // Nettoyer les montants_dus orphelins restants (sessions archivées sans nettoyage préalable)
+    {
+      const [{ data: sessionsActive }, { data: montantsDusActuels }] = await Promise.all([
+        supabase.from('gite_heures_sessions').select('date_session').eq('gite_id', gite_id),
+        supabase.from('gite_montants_dus').select('id, date_prestation').eq('gite_id', gite_id),
+      ])
+      const datesActives = new Set((sessionsActive || []).map(s => s.date_session))
+      const idsOrphelins = (montantsDusActuels || [])
+        .filter(m => !datesActives.has(m.date_prestation)).map(m => m.id)
+      if (idsOrphelins.length > 0)
+        await supabase.from('gite_montants_dus').delete().in('id', idsOrphelins)
     }
 
     // Calculer montant consommé et enregistrer dans l'historique
