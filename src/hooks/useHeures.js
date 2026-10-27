@@ -140,7 +140,20 @@ export function useHeures(giteId = null) {
         .eq('gite_id', gite_id)
         .in('date_prestation', datePrestations)
 
-    // 4. Supprimer les versements amiable sélectionnés
+    // 4. Nettoyer les montants_dus orphelins restants pour ce gîte
+    {
+      const [{ data: sessionsActive }, { data: montantsDusActuels }] = await Promise.all([
+        supabase.from('gite_heures_sessions').select('date_session').eq('gite_id', gite_id),
+        supabase.from('gite_montants_dus').select('id, date_prestation').eq('gite_id', gite_id),
+      ])
+      const datesActives = new Set((sessionsActive || []).map(s => s.date_session))
+      const idsOrphelins = (montantsDusActuels || [])
+        .filter(m => !datesActives.has(m.date_prestation)).map(m => m.id)
+      if (idsOrphelins.length > 0)
+        await supabase.from('gite_montants_dus').delete().in('id', idsOrphelins)
+    }
+
+    // 5. Supprimer les versements amiable sélectionnés
     if (versementIds.length > 0)
       await supabase.from('gite_versements').delete().in('id', versementIds)
 
