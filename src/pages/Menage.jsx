@@ -1,10 +1,10 @@
 import { useState } from 'react'
-import { ChevronDown, ChevronUp, Check, AlertCircle, Eye, Plus, Pencil, Trash2, X, Upload } from 'lucide-react'
+import { ChevronDown, ChevronUp, Check, AlertCircle, Eye, Plus, Pencil, Trash2, X, Upload, ShoppingBag } from 'lucide-react'
 import { useTasks } from '../hooks/useTasks'
 import { FREQ_INFO, ZONE_ICONS, ZONE_ICON_DEFAULT, parseTasksExcel } from '../lib/excel'
 
 function TaskEditModal({ task, onSave, onClose }) {
-  const [form, setForm] = useState(task || { zone: '', element: '', tache: '', freq: 1 })
+  const [form, setForm] = useState(task || { zone: '', element: '', tache: '', freq: 1, materiel: '' })
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -33,6 +33,20 @@ function TaskEditModal({ task, onSave, onClose }) {
                 <option key={n} value={n}>{n === 1 ? 'Chaque passage' : `Tous les ${n} passages`}</option>
               ))}
             </select>
+          </div>
+          <div className="form-field full">
+            <label>
+              Matériel nécessaire
+              <span style={{ color: '#9c9890', fontWeight: 400, marginLeft: 4 }}>(optionnel)</span>
+            </label>
+            <input
+              value={form.materiel || ''}
+              onChange={e => set('materiel', e.target.value)}
+              placeholder="Détartrant, chiffon microfibre..."
+            />
+            <div style={{ fontSize: 11, color: '#9c9890', marginTop: 3 }}>
+              Séparer par des virgules
+            </div>
           </div>
         </div>
         <div className="modal-actions">
@@ -63,6 +77,7 @@ export default function Menage({ giteId, onPassageClosed }) {
   const [showAddTask, setShowAddTask] = useState(false)
   const [importError, setImportError] = useState(null)
   const [importing, setImporting] = useState(false)
+  const [materielExpanded, setMaterielExpanded] = useState(true)
 
   const nextPassage = passageCount + 1
 
@@ -71,7 +86,6 @@ export default function Menage({ giteId, onPassageClosed }) {
   const handleClosePassage = async () => {
     await closePassage()
     setShowCloseConfirm(false)
-    // Si on est en popup depuis le Dashboard, prévenir que le passage est fait
     onPassageClosed?.()
   }
 
@@ -93,6 +107,15 @@ export default function Menage({ giteId, onPassageClosed }) {
 
   const doneDue = dueTasks.filter(t => isTaskDone(t.id)).length
   const pct     = dueTasks.length ? Math.round(doneDue / dueTasks.length * 100) : 0
+
+  // Liste dédupliquée du matériel à emporter (depuis toutes les tâches dues)
+  const materielsAEmporter = [
+    ...new Set(
+      dueTasks
+        .filter(t => t.materiel?.trim())
+        .flatMap(t => t.materiel.split(',').map(m => m.trim()).filter(Boolean))
+    )
+  ]
 
   const handleImport = async (e) => {
     const file = e.target.files?.[0]
@@ -121,6 +144,27 @@ export default function Menage({ giteId, onPassageClosed }) {
           <div className="mini-fill" style={{ width: `${pct}%` }} />
         </div>
       </div>
+
+      {/* ── BANNIÈRE À EMPORTER ── */}
+      {viewMode === 'due' && materielsAEmporter.length > 0 && (
+        <div className="materiel-banner">
+          <div className="materiel-banner-header" onClick={() => setMaterielExpanded(e => !e)}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <ShoppingBag size={14} />
+              <span className="materiel-banner-title">À emporter ({materielsAEmporter.length})</span>
+            </div>
+            {materielExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+          </div>
+          {materielExpanded && (
+            <div className="materiel-chips">
+              {materielsAEmporter.map(m => (
+                <span key={m} className="materiel-chip">{m}</span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="toolbar">
         <div className="view-toggle">
@@ -204,6 +248,12 @@ export default function Menage({ giteId, onPassageClosed }) {
                       <div className="task-body" onClick={() => handleToggle(t.id)}>
                         <div className="task-element">{t.element}</div>
                         <div className="task-tache">{t.tache}</div>
+                        {due && t.materiel?.trim() && (
+                          <div className="task-materiel">
+                            <ShoppingBag size={10} />
+                            {t.materiel}
+                          </div>
+                        )}
                       </div>
                       <div className="task-right">
                         <span className="freq-badge" style={{ color: freqInfo.color, background: freqInfo.bg }}>
