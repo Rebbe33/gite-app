@@ -97,7 +97,7 @@ export function useTasks(giteId) {
   const isTaskDone = (taskId) => logs.some(l => l.task_id === taskId && l.done)
 
   const isDue = (task) => {
-    const next = passageCount + 1
+    const next = passage ? passage.numero : passageCount + 1
     const lastDone = task.last_done_passage ?? 0
     return (next - lastDone) >= task.freq
   }
