@@ -79,7 +79,7 @@ export default function Menage({ giteId, onPassageClosed }) {
   const [importing, setImporting] = useState(false)
   const [materielExpanded, setMaterielExpanded] = useState(true)
 
-  const nextPassage = passageCount + 1
+  const nextPassage = passage ? passage.numero : passageCount + 1
 
   const handleToggle = async (taskId) => { await toggleTask(taskId) }
 
